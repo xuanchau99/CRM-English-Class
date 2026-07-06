@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automated Test Suite - English Exam Builder</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #5b75f5;
+            --primary-light: #eff2fe;
+            --secondary: #6bcb77;
+            --secondary-light: #eef9f0;
+            --accent: #ff6b6b;
+            --accent-light: #ffebeb;
+            --warning: #ffd93d;
+            --warning-light: #fffbea;
+            --background: #fdfbf7;
+            --text-main: #2d3748;
+            --text-muted: #718096;
+            --border-color: #f1ebd9;
+            --radius-lg: 20px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --font: 'Nunito', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            font-family: var(--font);
+            background-color: var(--background);
+            color: var(--text-main);
+            margin: 0;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            color: var(--primary);
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .summary-dashboard {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background-color: #fff;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.03);
+            text-align: center;
+        }
+
+        .card h3 {
+            margin: 0;
+            color: var(--text-muted);
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .card .value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-top: 0.5rem;
+        }
+
+        .passed-card .value { color: var(--secondary); }
+        .failed-card .value { color: var(--accent); }
+        .total-card .value { color: var(--primary); }
+
+        .btn {
+            background-color: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 0.8rem 1.5rem;
+            font-family: var(--font);
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(91, 117, 245, 0.2);
+            transition: all 0.2s ease;
+            display: inline-block;
+            margin-bottom: 2rem;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(91, 117, 245, 0.3);
+        }
+
+        .test-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .test-row {
+            background: #fff;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .test-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .test-name {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--text-main);
+        }
+
+        .status-badge {
+            font-weight: 800;
+            font-size: 0.85rem;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            text-transform: uppercase;
+        }
+
+        .status-passed {
+            background-color: var(--secondary-light);
+            color: #15803d;
+            border: 1px solid rgba(107, 203, 119, 0.3);
+        }
+
+        .status-failed {
+            background-color: var(--accent-light);
+            color: #b91c1c;
+            border: 1px solid rgba(255, 107, 107, 0.3);
+        }
+
+        .test-details {
+            font-family: monospace;
+            background: #faf8f5;
+            border: 1px solid var(--border-color);
+            padding: 0.8rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            color: var(--text-main);
+        }
+    </style>
+    <!-- Load libraries so script.js runs safely -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="script.js"></script>
+</head>
+<body>
+    <!-- Hidden DOM elements to prevent script.js DOM errors -->
+    <div style="display: none;">
+        <div id="app-container"></div>
+        <button id="adminModeBtn"></button>
+        <button id="studentModeBtn"></button>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>Automated Test Suite</h1>
+            <p style="color: var(--text-muted); font-size: 1.1rem;">Verifying Frontend Grading, Normalization, & Excel Validation Rules</p>
+        </header>
+
+        <div class="summary-dashboard">
+            <div class="card total-card">
+                <h3>Total Tests</h3>
+                <div class="value" id="total-count">0</div>
+            </div>
+            <div class="card passed-card">
+                <h3>Passed</h3>
+                <div class="value" id="passed-count">0</div>
+            </div>
+            <div class="card failed-card">
+                <h3>Failed</h3>
+                <div class="value" id="failed-count">0</div>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; justify-content: center;">
+            <button id="run-btn" class="btn">Run Tests Again</button>
+            <a href="index.html" class="btn" style="background-color: var(--secondary); box-shadow: 0 4px 12px rgba(107, 203, 119, 0.2);">Go to Application</a>
+        </div>
+
+        <div class="test-list" id="test-results-list">
+            <!-- Results will be written here -->
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Delay test execution briefly to ensure script.js DOMContentLoaded executes and sets EnglishExamUtils
+            setTimeout(runTests, 200);
+
+            document.getElementById('run-btn').addEventListener('click', runTests);
+        });
+
+        function runTests() {
+            const listEl = document.getElementById('test-results-list');
+            listEl.innerHTML = '<p style="text-align:center;">Running test suite...</p>';
+
+            const utils = window.EnglishExamUtils;
+            if (!utils) {
+                listEl.innerHTML = '<p style="text-align:center; color:red; font-weight:bold;">Error: window.EnglishExamUtils is not found. Make sure script.js is loaded successfully.</p>';
+                return;
+            }
+
+            const tests = [];
+            let passed = 0;
+            let failed = 0;
+
+            function assertEqual(actual, expected, testName) {
+                const isMatch = actual === expected;
+                logResult(isMatch, testName, `Expected: ${expected}\nActual:   ${actual}`);
+            }
+
+            function assertDeepEqual(actual, expected, testName) {
+                const actStr = JSON.stringify(actual);
+                const expStr = JSON.stringify(expected);
+                const isMatch = actStr === expStr;
+                logResult(isMatch, testName, `Expected: ${expStr}\nActual:   ${actStr}`);
+            }
+
+            function assert(condition, testName, details) {
+                logResult(condition, testName, details);
+            }
+
+            function logResult(success, name, details) {
+                if (success) passed++;
+                else failed++;
+                tests.push({ success, name, details });
+            }
+
+            // --- 1. Test normalizeAnswer ---
+            try {
+                const norm = utils.normalizeAnswer;
+                assertEqual(norm('  Apple   '), 'apple', 'normalizeAnswer: Trims spacing & lowercases');
+                assertEqual(norm('He went to school.'), 'he went to school', 'normalizeAnswer: Removes trailing period');
+                assertEqual(norm('Is it correct?'), 'is it correct', 'normalizeAnswer: Removes trailing question mark');
+                assertEqual(norm('Amazing!'), 'amazing', 'normalizeAnswer: Removes trailing exclamation point');
+                assertEqual(norm('Multiple    Spaces   Here'), 'multiple spaces here', 'normalizeAnswer: Collapses multiple spaces');
+                assertEqual(norm(null), '', 'normalizeAnswer: Handles null safely');
+                assertEqual(norm(undefined), '', 'normalizeAnswer: Handles undefined safely');
+            } catch (e) {
+                logResult(false, 'normalizeAnswer Suite', 'Crashed with error: ' + e.message);
+            }
+
+            // --- 2. Test validateQuestionRow ---
+            try {
+                const valRow = utils.validateQuestionRow;
+                
+                // Case A: Valid MCQ row
+                const validRow = {
+                    question_id: 'Q501',
+                    exam_id: 'ENG_T1',
+                    type: 'multiple_choice',
+                    correct_answer: 'A'
+                };
+                const errsA = valRow(validRow, 0, new Set(), new Set());
+                assertEqual(errsA.length, 0, 'validateQuestionRow: Valid MCQ row returns 0 errors');
+
+                // Case B: Missing correct_answer
+                const missingAnsRow = {
+                    question_id: 'Q502',
+                    exam_id: 'ENG_T1',
+                    type: 'multiple_choice'
+                };
+                const errsB = valRow(missingAnsRow, 0, new Set(), new Set());
+                assert(errsB.length > 0 && errsB[0].includes('correct_answer'), 'validateQuestionRow: Flags missing correct_answer', errsB.join('\n'));
+
+                // Case C: Invalid type
+                const invalidTypeRow = {
+                    question_id: 'Q503',
+                    exam_id: 'ENG_T1',
+                    type: 'fill_gaps_invalid',
+                    correct_answer: 'walk'
+                };
+                const errsC = valRow(invalidTypeRow, 0, new Set(), new Set());
+                assert(errsC.length > 0 && errsC[0].includes('Invalid type'), 'validateQuestionRow: Flags invalid question type', errsC.join('\n'));
+
+                // Case D: Duplicate ID in file
+                const duplicateRow = {
+                    question_id: 'Q501',
+                    exam_id: 'ENG_T1',
+                    type: 'multiple_choice',
+                    correct_answer: 'B'
+                };
+                const fileIds = new Set(['Q501']);
+                const errsD = valRow(duplicateRow, 0, new Set(), fileIds);
+                assert(errsD.length > 0 && errsD[0].includes('Duplicate question_id'), 'validateQuestionRow: Flags duplicate ID in file', errsD.join('\n'));
+            } catch (e) {
+                logResult(false, 'validateQuestionRow Suite', 'Crashed with error: ' + e.message);
+            }
+
+            // --- 3. Test Auto Grading Engine ---
+            try {
+                // Setup mock state for testing gradeExam
+                window.currentExamState = {
+                    exam: { exam_id: 'TEST_EXAM', title: 'Test Exam', duration_minutes: 10 },
+                    student: { name: 'Automated Test', class: '7A' },
+                    questions: [
+                        { question_id: 'Q1', type: 'multiple_choice', correct_answer: 'likes', options: ['like', 'likes', 'liked'], points: 2, active: true },
+                        { question_id: 'Q2', type: 'true_false', correct_answer: 'False', options: ['True', 'False'], points: 2, active: true },
+                        { question_id: 'Q3', type: 'fill_blank', correct_answer: 'walk', accepted_answers: ['walk', 'walks'], points: 2, active: true },
+                        { question_id: 'Q4', type: 'arrange_sentence', correct_answer: 'Where do you live ?', points: 3, active: true },
+                        { question_id: 'Q5', type: 'matching', correct_answer: '{"blackboard":"bảng đen","notebook":"vở"}', options: ['blackboard|bảng đen', 'notebook|vở'], points: 4, active: true },
+                        { question_id: 'Q6', type: 'short_answer', correct_answer: '', accepted_answers: [], points: 5, active: true }
+                    ],
+                    answers: [
+                        'likes',                              // Q1 correct
+                        'True',                               // Q2 incorrect
+                        'WALKS',                              // Q3 correct (case mismatch, should normalize)
+                        'where do you live',                  // Q4 correct (punctuation mismatch, should normalize)
+                        '{"blackboard":"bảng đen","notebook":"vở ghi"}', // Q5 matching: 1 pair correct, 1 incorrect
+                        'I enjoy learning English.'           // Q6 short answer (needs review)
+                    ],
+                    durationSeconds: 120,
+                    startTime: new Date()
+                };
+
+                const report = utils.gradeExam();
+                const summary = report.summary;
+                const details = report.details;
+
+                assertEqual(summary.correct_count, 3, 'Auto Grading: Calculates correct questions (Q1, Q3, Q4)');
+                assertEqual(summary.wrong_count, 2, 'Auto Grading: Calculates wrong questions (Q2, Q5 - partially incorrect counts as wrong but gets partial points)');
+                assertEqual(summary.manual_review_count, 1, 'Auto Grading: Flags short answer for manual review');
+                
+                // MCQ validation
+                assertEqual(details[0].points_earned, 2, 'Auto Grading MCQ: Full points for exact match');
+                assertEqual(details[1].points_earned, 0, 'Auto Grading TF: Zero points for incorrect choice');
+                
+                // Fill Blank normalization check
+                assertEqual(details[2].points_earned, 2, 'Auto Grading Fill Blank: Case normalization works');
+                assertEqual(details[2].is_correct, 'TRUE', 'Auto Grading Fill Blank: Accepts matching alternative in accepted_answers');
+                
+                // Arrange sentence normalization check
+                assertEqual(details[3].points_earned, 3, 'Auto Grading Arrange Sentence: Ignores trailing spaces/punctuation');
+
+                // Proportional matching credit validation (1 pair correct out of 2)
+                assertEqual(details[4].points_earned, 2, 'Auto Grading Matching: Awards proportional points (2/4 points for 50% correct pairs)');
+                assertEqual(details[4].is_correct, 'FALSE', 'Auto Grading Matching: Partially correct evaluates to is_correct = FALSE');
+
+                // Short answer review flag
+                assertEqual(details[5].need_manual_review, 'TRUE', 'Auto Grading Short Answer: Flags need_manual_review if no accepted answers exist');
+                assertEqual(details[5].points_earned, 0, 'Auto Grading Short Answer: Starts with 0 points pending review');
+
+            } catch (e) {
+                logResult(false, 'Auto Grading Suite', 'Crashed with error: ' + e.message);
+            }
+
+            // --- 4. Test Caching / Draft in LocalStorage ---
+            try {
+                localStorage.removeItem('exam_draft_MOCK_EXAM_ID');
+                const testDraft = {
+                    answers: ['A', 'B', null],
+                    currentQuestionIndex: 1,
+                    remainingSeconds: 300
+                };
+                
+                localStorage.setItem('exam_draft_MOCK_EXAM_ID', JSON.stringify(testDraft));
+                
+                const loaded = JSON.parse(localStorage.getItem('exam_draft_MOCK_EXAM_ID'));
+                assertDeepEqual(loaded, testDraft, 'Draft System: Saved and retrieved draft state correctly');
+                
+                localStorage.removeItem('exam_draft_MOCK_EXAM_ID');
+                assertEqual(localStorage.getItem('exam_draft_MOCK_EXAM_ID'), null, 'Draft System: Cleared draft successfully');
+            } catch (e) {
+                logResult(false, 'Draft Cache Suite', 'Crashed with error: ' + e.message);
+            }
+
+            // Render Output
+            document.getElementById('total-count').textContent = tests.length;
+            document.getElementById('passed-count').textContent = passed;
+            document.getElementById('failed-count').textContent = failed;
+
+            let rowsHtml = '';
+            tests.forEach(test => {
+                rowsHtml += `
+                    <div class="test-row">
+                        <div class="test-header">
+                            <span class="test-name">${test.name}</span>
+                            <span class="status-badge ${test.success ? 'status-passed' : 'status-failed'}">
+                                ${test.success ? 'Passed' : 'Failed'}
+                            </span>
+                        </div>
+                        <div class="test-details">${test.details}</div>
+                    </div>
+                `;
+            });
+            listEl.innerHTML = rowsHtml;
+        }
+    </script>
+</body>
+</html>

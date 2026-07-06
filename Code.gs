@@ -1,0 +1,380 @@
+const SPREADSHEET_ID = '1I_fWLSj-LXyMBziTy38y-2AgbyCEgTloqKbHrEz3_T0'; // Replace with your Google Sheet ID
+
+function doGet(e) {
+  const action = e.parameter.action;
+
+  try {
+    switch (action) {
+      case 'getExams':
+        return createJsonResponse({ status: 'success', data: getExams() });
+      case 'getQuestions':
+        const examId = e.parameter.examId;
+        if (!examId) throw new Error('examId parameter is required for getQuestions.');
+        return createJsonResponse({ status: 'success', data: getQuestions(examId) });
+      case 'getSubmissions':
+        return createJsonResponse({ status: 'success', data: getSubmissions() });
+      case 'getSubmissionDetails':
+        const submissionId = e.parameter.submissionId;
+        if (!submissionId) throw new Error('submissionId parameter is required.');
+        return createJsonResponse({ status: 'success', data: getSubmissionDetails(submissionId) });
+      case 'healthCheck':
+        return createJsonResponse({ status: 'OK', message: 'Apps Script is running.' });
+      default:
+        throw new Error('Invalid action for GET request: ' + action);
+    }
+  } catch (error) {
+    console.error('Error in doGet:', error.message, error.stack);
+    return createErrorResponse(error.message);
+  }
+}
+
+function doPost(e) {
+  const action = e.parameter.action;
+  const payload = JSON.parse(e.postData.contents);
+
+  try {
+    switch (action) {
+      case 'saveExam':
+        return createJsonResponse(saveExam(payload));
+      case 'importQuestions':
+        return createJsonResponse(importQuestions(payload));
+      case 'submitResult':
+        return createJsonResponse(submitResult(payload));
+      case 'editQuestion':
+        return createJsonResponse(editQuestion(payload));
+      case 'deleteQuestion':
+        return createJsonResponse(deleteQuestion(payload));
+      case 'editExam':
+        return createJsonResponse(editExam(payload));
+      case 'deleteExam':
+        return createJsonResponse(deleteExam(payload));
+      default:
+        throw new Error('Invalid action for POST request: ' + action);
+    }
+  } catch (error) {
+    console.error('Error in doPost:', error.message, error.stack);
+    return createErrorResponse(error.message);
+  }
+}
+
+// --- Sheet Helper Functions ---
+function getSheet(sheetName) {
+  const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = spreadsheet.getSheetByName(sheetName);
+
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(sheetName);
+    // Add headers if the sheet is new
+    switch (sheetName) {
+      case 'Exams':
+        sheet.appendRow(['exam_id', 'title', 'duration_minutes', 'shuffle_questions', 'shuffle_options', 'show_result', 'active', 'created_at']);
+        break;
+      case 'Questions':
+        sheet.appendRow(['question_id', 'exam_id', 'type', 'level', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer', 'accepted_answers', 'explanation', 'points', 'tags', 'active']);
+        break;
+      case 'Submissions':
+        sheet.appendRow(['submission_id', 'exam_id', 'exam_title', 'student_id', 'student_name', 'class_name', 'score', 'total_points', 'percentage', 'correct_count', 'wrong_count', 'unanswered_count', 'manual_review_count', 'duration_seconds', 'submitted_at']);
+        break;
+      case 'SubmissionDetails':
+        sheet.appendRow(['submission_id', 'question_id', 'question_type', 'question_text', 'student_answer', 'correct_answer', 'is_correct', 'need_manual_review', 'points', 'points_earned', 'explanation']);
+        break;
+    }
+  }
+  return sheet;
+}
+
+function getRowsData(sheet) {
+  const rows = sheet.getDataRange().getValues();
+  if (rows.length === 0) return [];
+  const headers = rows[0];
+  const data = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const rowObject = {};
+    for (let j = 0; j < headers.length; j++) {
+      rowObject[headers[j]] = row[j];
+    }
+    data.push(rowObject);
+  }
+  return data;
+}
+
+// --- API Functions ---
+function getExams() {
+  const sheet = getSheet('Exams');
+  return getRowsData(sheet);
+}
+
+function getQuestions(examId) {
+  const sheet = getSheet('Questions');
+  const allQuestions = getRowsData(sheet);
+  return allQuestions.filter(q => String(q.exam_id) === String(examId));
+}
+
+function saveExam(examPayload) {
+  const sheet = getSheet('Exams');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const newRow = [];
+  
+  // Check for duplicate exam_id
+  const existingExams = getRowsData(sheet);
+  if (existingExams.some(exam => exam.exam_id === examPayload.exam_id)) {
+    throw new Error(`Exam with ID '${examPayload.exam_id}' already exists.`);
+  }
+
+  for (const header of headers) {
+    let value = examPayload[header];
+    if (value !== null && value !== undefined) {
+      try {
+        const strVal = String(value).trim().toLowerCase();
+        if (strVal === 'true') value = true;
+        if (strVal === 'false') value = false;
+      } catch (e) {}
+    }
+    newRow.push(value !== undefined ? value : '');
+  }
+  sheet.appendRow(newRow);
+  return { status: 'success', message: 'Exam saved successfully', exam_id: examPayload.exam_id };
+}
+
+function importQuestions(questionsPayload) {
+  const sheet = getSheet('Questions');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const existingQuestions = getRowsData(sheet);
+  const appendedQuestions = [];
+  const validTypes = ['multiple_choice', 'true_false', 'fill_blank', 'arrange_sentence', 'vocabulary', 'matching', 'short_answer'];
+
+  for (let i = 0; i < questionsPayload.length; i++) {
+    const question = questionsPayload[i];
+    const rowNum = i + 2; // Excel row number
+
+    // Validate required fields
+    if (!question.question_id) throw new Error(`Row ${rowNum}: 'question_id' is missing.`);
+    if (!question.exam_id) throw new Error(`Row ${rowNum} (ID: ${question.question_id}): 'exam_id' is missing.`);
+    if (!question.type) throw new Error(`Row ${rowNum} (ID: ${question.question_id}): 'type' is missing.`);
+    const correctAnswerOptional = ['short_answer', 'matching'].includes(String(question.type).trim().toLowerCase());
+    if (!correctAnswerOptional && (question.correct_answer === undefined || question.correct_answer === null || String(question.correct_answer).trim() === '')) {
+      throw new Error(`Row ${rowNum} (ID: ${question.question_id}): 'correct_answer' is missing.`);
+    }
+
+    // Validate type
+    if (validTypes.indexOf(question.type) === -1) {
+      throw new Error(`Row ${rowNum} (ID: ${question.question_id}): Invalid question type '${question.type}'.`);
+    }
+
+    // Check for duplicate question_id within the same exam_id
+    if (existingQuestions.some(q => q.exam_id === question.exam_id && q.question_id === question.question_id)) {
+      throw new Error(`Duplicate question_id '${question.question_id}' found for exam '${question.exam_id}'.`);
+    }
+    // Check for duplicates within the payload itself
+    if (questionsPayload.slice(0, i).some(q => q.exam_id === question.exam_id && q.question_id === question.question_id)) {
+      throw new Error(`Row ${rowNum}: Duplicate question_id '${question.question_id}' found within the import file for exam '${question.exam_id}'.`);
+    }
+
+    const newRow = [];
+    for (const header of headers) {
+      let value = question[header];
+      if (value !== null && value !== undefined) {
+        try {
+          const strVal = String(value).trim();
+          if (strVal.toLowerCase() === 'true') value = true;
+          else if (strVal.toLowerCase() === 'false') value = false;
+          else if (header === 'accepted_answers' && strVal.startsWith('[') && strVal.endsWith(']')) {
+            try { value = JSON.parse(strVal); } catch (e) {}
+          }
+        } catch (e) {}
+      }
+      newRow.push(value !== undefined ? value : '');
+    }
+    sheet.appendRow(newRow);
+    appendedQuestions.push(question.question_id);
+  }
+  return { status: 'success', message: `${appendedQuestions.length} questions imported successfully`, imported_question_ids: appendedQuestions };
+}
+
+function submitResult(submissionPayload) {
+  const submissionSheet = getSheet('Submissions');
+  const submissionDetailSheet = getSheet('SubmissionDetails');
+
+  const submissionSummary = submissionPayload.summary;
+  const submissionDetails = submissionPayload.details;
+
+  // Safety checks for completely empty sheets
+  if (submissionSheet.getLastColumn() === 0) {
+    submissionSheet.appendRow(['submission_id', 'exam_id', 'exam_title', 'student_id', 'student_name', 'class_name', 'score', 'total_points', 'percentage', 'correct_count', 'wrong_count', 'unanswered_count', 'manual_review_count', 'duration_seconds', 'submitted_at']);
+  }
+  if (submissionDetailSheet.getLastColumn() === 0) {
+    submissionDetailSheet.appendRow(['submission_id', 'question_id', 'question_type', 'question_text', 'student_answer', 'correct_answer', 'is_correct', 'need_manual_review', 'points', 'points_earned', 'explanation']);
+  }
+
+  // Check for duplicate submission_id
+  const existingSubmissions = getRowsData(submissionSheet);
+  if (existingSubmissions.some(s => s.submission_id === submissionSummary.submission_id)) {
+    return { status: 'success', message: 'Submission already exists (duplicate check)', submission_id: submissionSummary.submission_id };
+  }
+
+  // Append submission summary
+  const summaryHeaders = submissionSheet.getRange(1, 1, 1, submissionSheet.getLastColumn()).getValues()[0];
+  const summaryRow = [];
+  for (const header of summaryHeaders) {
+    summaryRow.push(submissionSummary[header] !== undefined ? submissionSummary[header] : '');
+  }
+  submissionSheet.appendRow(summaryRow);
+
+  // Append submission details
+  const detailHeaders = submissionDetailSheet.getRange(1, 1, 1, submissionDetailSheet.getLastColumn()).getValues()[0];
+  for (const detail of submissionDetails) {
+    const detailRow = [];
+    for (const header of detailHeaders) {
+      detailRow.push(detail[header] !== undefined ? detail[header] : '');
+    }
+    submissionDetailSheet.appendRow(detailRow);
+  }
+
+  return { status: 'success', message: 'Submission saved successfully', submission_id: submissionSummary.submission_id };
+}
+
+function editQuestion(qPayload) {
+  const sheet = getSheet('Questions');
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows[0];
+  
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[0]) === String(qPayload.question_id) && String(row[1]) === String(qPayload.exam_id)) {
+      rowIndex = i + 1; // 1-based row index in Google Sheet
+      break;
+    }
+  }
+  
+  if (rowIndex === -1) {
+    throw new Error(`Question with ID '${qPayload.question_id}' and Exam ID '${qPayload.exam_id}' not found.`);
+  }
+  
+  const updatedRow = [];
+  for (const header of headers) {
+    let value = qPayload[header];
+    if (value !== null && value !== undefined) {
+      try {
+        const strVal = String(value).trim().toLowerCase();
+        if (strVal === 'true') value = true;
+        if (strVal === 'false') value = false;
+      } catch (e) {}
+    }
+    updatedRow.push(value !== undefined ? value : '');
+  }
+  
+  const range = sheet.getRange(rowIndex, 1, 1, headers.length);
+  range.setValues([updatedRow]);
+  return { status: 'success', message: 'Question updated successfully', question_id: qPayload.question_id };
+}
+
+function deleteQuestion(qPayload) {
+  const sheet = getSheet('Questions');
+  const rows = sheet.getDataRange().getValues();
+  
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[0]) === String(qPayload.question_id) && String(row[1]) === String(qPayload.exam_id)) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+  
+  if (rowIndex === -1) {
+    throw new Error(`Question with ID '${qPayload.question_id}' and Exam ID '${qPayload.exam_id}' not found.`);
+  }
+  
+  sheet.deleteRow(rowIndex);
+  return { status: 'success', message: 'Question deleted successfully', question_id: qPayload.question_id };
+}
+
+function editExam(examPayload) {
+  const sheet = getSheet('Exams');
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows[0];
+  
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(examPayload.exam_id)) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+  
+  if (rowIndex === -1) {
+    throw new Error(`Exam with ID '${examPayload.exam_id}' not found.`);
+  }
+  
+  const updatedRow = [];
+  for (const header of headers) {
+    let value = examPayload[header];
+    if (value !== null && value !== undefined) {
+      try {
+        const strVal = String(value).trim().toLowerCase();
+        if (strVal === 'true') value = true;
+        if (strVal === 'false') value = false;
+      } catch (e) {}
+    }
+    // If field is undefined, keep existing sheet cell value
+    const valIndex = headers.indexOf(header);
+    updatedRow.push(value !== undefined ? value : rows[rowIndex - 1][valIndex]);
+  }
+  
+  const range = sheet.getRange(rowIndex, 1, 1, headers.length);
+  range.setValues([updatedRow]);
+  return { status: 'success', message: 'Exam updated successfully', exam_id: examPayload.exam_id };
+}
+
+function deleteExam(examPayload) {
+  const examId = examPayload.exam_id;
+  
+  // 1. Delete Exam row
+  const examSheet = getSheet('Exams');
+  const examRows = examSheet.getDataRange().getValues();
+  let examRowIndex = -1;
+  for (let i = 1; i < examRows.length; i++) {
+    if (String(examRows[i][0]) === String(examId)) {
+      examRowIndex = i + 1;
+      break;
+    }
+  }
+  if (examRowIndex !== -1) {
+    examSheet.deleteRow(examRowIndex);
+  }
+  
+  // 2. Delete associated questions
+  const qSheet = getSheet('Questions');
+  const qRows = qSheet.getDataRange().getValues();
+  for (let i = qRows.length - 1; i >= 1; i--) {
+    if (String(qRows[i][1]) === String(examId)) {
+      qSheet.deleteRow(i + 1);
+    }
+  }
+  
+  return { status: 'success', message: 'Exam and all its questions deleted successfully', exam_id: examId };
+}
+
+function getSubmissions() {
+  const sheet = getSheet('Submissions');
+  return getRowsData(sheet);
+}
+
+function getSubmissionDetails(submissionId) {
+  const sheet = getSheet('SubmissionDetails');
+  const allDetails = getRowsData(sheet);
+  return allDetails.filter(d => String(d.submission_id) === String(submissionId));
+}
+
+// --- Response Helpers ---
+function createJsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function createErrorResponse(message, statusCode = 500) {
+  return ContentService.createTextOutput(JSON.stringify({ error: message, status: 'error' }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
