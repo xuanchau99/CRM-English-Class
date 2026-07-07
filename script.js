@@ -9,6 +9,14 @@ const escapeSingleQuotes = (str) => {
     return str.replace(/'/g, "\\'");
 };
 
+// Helper for UTC+7 ISO String
+const getUTC7ISOString = () => {
+    const date = new Date();
+    // Offset by +7 hours
+    const utc7Date = new Date(date.getTime() + (7 * 60 * 60 * 1000));
+    return utc7Date.toISOString().replace('Z', '+07:00');
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     const appContainer = document.getElementById('app-container');
     
@@ -47,16 +55,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const db = {
         async getExams() {
             const useMock = localStorage.getItem('use_mock_db') === 'true';
+            const session = JSON.parse(sessionStorage.getItem('teacher_session') || 'null');
+            const teacherId = session ? session.username : '';
             if (useMock) {
                 const exams = JSON.parse(localStorage.getItem('mock_exams') || '[]');
-                return exams.filter(e => e.active === true || e.active === 'TRUE');
+                const activeExams = exams.filter(e => e.active === true || e.active === 'TRUE');
+                return teacherId ? activeExams.filter(e => !e.teacher_id || String(e.teacher_id) === teacherId) : activeExams;
             }
             try {
                 const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
-                const response = await fetch(endpoint + '?action=getExams');
+                const url = teacherId ? `${endpoint}?action=getExams&teacherId=${encodeURIComponent(teacherId)}` : `${endpoint}?action=getExams`;
+                const response = await fetch(url);
                 const result = await response.json();
                 if (result.status === 'success') {
-                    // Cache to mock database for offline fallback
                     localStorage.setItem('mock_exams', JSON.stringify(result.data));
                     return result.data;
                 }
@@ -66,7 +77,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem('use_mock_db', 'true');
                 updateDbStatusIndicator();
                 const exams = JSON.parse(localStorage.getItem('mock_exams') || '[]');
-                return exams.filter(e => e.active === true || e.active === 'TRUE');
+                const activeExams = exams.filter(e => e.active === true || e.active === 'TRUE');
+                return teacherId ? activeExams.filter(e => !e.teacher_id || String(e.teacher_id) === teacherId) : activeExams;
+            }
+        },
+
+        async login(username, password) {
+            const useMock = localStorage.getItem('use_mock_db') === 'true';
+            if (useMock) {
+                const teachers = JSON.parse(localStorage.getItem('mock_teachers') || '[]');
+                const teacher = teachers.find(t => String(t.username).trim() === String(username).trim() && String(t.password).trim() === String(password).trim());
+                if (!teacher) throw new Error('Tên đăng nhập hoặc mật khẩu không đúng.');
+                return { username: teacher.username, name: teacher.name, phone: teacher.phone };
+            }
+            try {
+                const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
+                const response = await fetch(endpoint + '?action=login', {
+                    method: 'POST',
+                    mode: 'cors',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ username, password })
+                });
+                const result = await response.json();
+                if (result.status === 'success') return result.data;
+                throw new Error(result.error || 'Đăng nhập thất bại.');
+            } catch (error) {
+                // Fallback to mock on API error
+                const teachers = JSON.parse(localStorage.getItem('mock_teachers') || '[]');
+                const teacher = teachers.find(t => String(t.username).trim() === String(username).trim() && String(t.password).trim() === String(password).trim());
+                if (teacher) return { username: teacher.username, name: teacher.name };
+                throw new Error(error.message || 'Đăng nhập thất bại.');
             }
         },
 
@@ -99,6 +140,10 @@ document.addEventListener('DOMContentLoaded', () => {
         },
 
         async saveExam(examData) {
+            // Auto-attach teacher_id from session
+            const session = JSON.parse(sessionStorage.getItem('teacher_session') || 'null');
+            if (session && !examData.teacher_id) examData.teacher_id = session.username;
+
             const useMock = localStorage.getItem('use_mock_db') === 'true';
             if (useMock) {
                 const exams = JSON.parse(localStorage.getItem('mock_exams') || '[]');
@@ -120,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 const result = await response.json();
                 if (result.status === 'success') return result;
-                throw new Error(result.error || 'Failed to save exam on Google Sheets.');
+                throw new Error(result.error || 'Failed to save exam on Server.');
             } catch (error) {
                 console.warn('API save failed, attempting mock save:', error);
                 // Also write to mock
@@ -345,25 +390,215 @@ document.addEventListener('DOMContentLoaded', () => {
                 const allDetails = JSON.parse(localStorage.getItem('mock_submission_details') || '[]');
                 return allDetails.filter(d => String(d.submission_id) === String(submissionId));
             }
+        },
+
+        async deleteSubmission(submissionId) {
+            const useMock = localStorage.getItem('use_mock_db') === 'true';
+            if (useMock) {
+                const subs = JSON.parse(localStorage.getItem('mock_submissions') || '[]');
+                const filteredSubs = subs.filter(s => String(s.submission_id) !== String(submissionId));
+                localStorage.setItem('mock_submissions', JSON.stringify(filteredSubs));
+
+                const details = JSON.parse(localStorage.getItem('mock_submission_details') || '[]');
+                const filteredDetails = details.filter(d => String(d.submission_id) !== String(submissionId));
+                localStorage.setItem('mock_submission_details', JSON.stringify(filteredDetails));
+
+                return { status: 'success', message: 'Deleted submission locally.' };
+            }
+            try {
+                const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
+                const response = await fetch(endpoint + '?action=deleteSubmission', {
+                    method: 'POST',
+                    mode: 'cors',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ submission_id: submissionId })
+                });
+                const result = await response.json();
+                if (result.status === 'success') return result;
+                throw new Error(result.error || 'Failed to delete submission.');
+            } catch (error) {
+                console.error(error);
+                throw new Error(`Lỗi xóa bài làm: ${error.message}`);
+            }
+        },
+
+        async getGames() {
+            const useMock = localStorage.getItem('use_mock_db') === 'true';
+            if (useMock) {
+                return JSON.parse(localStorage.getItem('mock_games') || '[]');
+            }
+            try {
+                const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
+                const response = await fetch(endpoint + '?action=getGames');
+                const result = await response.json();
+                if (result.status === 'success') return result.data;
+                throw new Error(result.error || 'Failed to fetch games.');
+            } catch (error) {
+                console.warn('getGames API failed, using mock:', error);
+                return JSON.parse(localStorage.getItem('mock_games') || '[]');
+            }
+        },
+
+        async saveGame(game) {
+            if (!game.game_id) game.game_id = 'GAME_' + Date.now();
+            if (!game.created_at) game.created_at = getUTC7ISOString();
+            const useMock = localStorage.getItem('use_mock_db') === 'true';
+            if (useMock) {
+                const games = JSON.parse(localStorage.getItem('mock_games') || '[]');
+                const idx = games.findIndex(g => g.game_id === game.game_id);
+                if (idx >= 0) games[idx] = game; else games.push(game);
+                localStorage.setItem('mock_games', JSON.stringify(games));
+                return { status: 'success', game_id: game.game_id };
+            }
+            try {
+                const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
+                const response = await fetch(endpoint + '?action=saveGame', {
+                    method: 'POST', mode: 'cors', redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(game)
+                });
+                const result = await response.json();
+                if (result.status === 'success') return result;
+                throw new Error(result.error || 'Failed to save game.');
+            } catch (error) {
+                // Fallback to mock
+                const games = JSON.parse(localStorage.getItem('mock_games') || '[]');
+                const idx = games.findIndex(g => g.game_id === game.game_id);
+                if (idx >= 0) games[idx] = game; else games.push(game);
+                localStorage.setItem('mock_games', JSON.stringify(games));
+                return { status: 'success', game_id: game.game_id };
+            }
+        },
+
+        async deleteGame(gameId) {
+            const useMock = localStorage.getItem('use_mock_db') === 'true';
+            if (useMock) {
+                const games = JSON.parse(localStorage.getItem('mock_games') || '[]');
+                localStorage.setItem('mock_games', JSON.stringify(games.filter(g => g.game_id !== gameId)));
+                return { status: 'success' };
+            }
+            try {
+                const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
+                const response = await fetch(endpoint + '?action=deleteGame', {
+                    method: 'POST', mode: 'cors', redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ game_id: gameId })
+                });
+                const result = await response.json();
+                if (result.status === 'success') return result;
+                throw new Error(result.error || 'Failed to delete game.');
+            } catch (error) {
+                const games = JSON.parse(localStorage.getItem('mock_games') || '[]');
+                localStorage.setItem('mock_games', JSON.stringify(games.filter(g => g.game_id !== gameId)));
+                return { status: 'success' };
+            }
         }
     };
+
 
     /**
      * UI Mode Loading
      */
-    function loadAdminMode() {
+    function loadLoginScreen() {
+        const session = JSON.parse(sessionStorage.getItem('teacher_session') || 'null');
+        if (session) { loadAdminMode(); return; }
+
         appContainer.innerHTML = `
+            <div id="login-screen">
+                <div class="login-card">
+                    <div class="login-logo">
+                        <span class="app-icon">📚</span>
+                        <h2>EnglishTools</h2>
+                        <p>Đăng nhập để quản lý bài kiểm tra</p>
+                    </div>
+                    <div class="login-field">
+                        <label for="login-username">👤 Tên đăng nhập</label>
+                        <input type="text" id="login-username" placeholder="username" autocomplete="username">
+                    </div>
+                    <div class="login-field">
+                        <label for="login-password">🔑 Mật khẩu</label>
+                        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+                    </div>
+                    <button class="login-btn" id="login-submit-btn">🚀 Đăng nhập</button>
+                    <div class="login-error" id="login-error-msg"></div>
+                    <div style="margin-top: 1.5rem; text-align: center;">
+                        <button type="button" id="reset-db-btn" style="background: none; border: none; color: var(--primary); font-size: 0.85rem; text-decoration: underline; cursor: pointer; display: inline-flex; align-items: center; gap: 0.25rem;">
+                            <span>🔄</span> Khôi phục Server (Tắt Offline Mode)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const doLogin = async () => {
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value.trim();
+            const errorEl = document.getElementById('login-error-msg');
+            const btn = document.getElementById('login-submit-btn');
+
+            if (!username || !password) {
+                errorEl.textContent = '⚠️ Vui lòng nhập đầy đủ thông tin.';
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Đang đăng nhập...';
+            errorEl.style.display = 'none';
+
+            try {
+                const teacher = await db.login(username, password);
+                sessionStorage.setItem('teacher_session', JSON.stringify(teacher));
+                loadAdminMode();
+            } catch (err) {
+                errorEl.textContent = '❌ ' + err.message;
+                errorEl.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = '🚀 Đăng nhập';
+            }
+        };
+
+        document.getElementById('login-submit-btn').onclick = doLogin;
+        document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+        document.getElementById('login-username').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+        const resetBtn = document.getElementById('reset-db-btn');
+        if (resetBtn) {
+            resetBtn.onclick = () => {
+                localStorage.setItem('use_mock_db', 'false');
+                updateDbStatusIndicator();
+                alert('Đã khôi phục kết nối Server thành công! Bạn có thể thử đăng nhập lại.');
+            };
+        }
+    }
+
+    function loadAdminMode() {
+        const session = JSON.parse(sessionStorage.getItem('teacher_session') || 'null');
+        const teacherName = session ? session.name : 'Admin';
+        const teacherInitial = teacherName.slice(0, 1).toUpperCase();
+
+        appContainer.innerHTML = `
+            <div class="teacher-info-bar">
+                <div class="teacher-avatar">${teacherInitial}</div>
+                <span>Hello, <strong>${teacherName}</strong></span>
+                <button class="logout-btn" id="logout-btn">🚪 Logout</button>
+            </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                 <h2>Admin Mode</h2>
-                <button id="open-settings-btn" class="btn-secondary" style="font-weight: 800; border: 2px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">⚙️ Settings</button>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button id="open-guide-btn" class="btn-secondary" style="font-weight: 800; border: 2px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem; background-color: var(--info-light); color: var(--info);">📖 Guide</button>
+                    <button id="open-settings-btn" class="btn-secondary" style="font-weight: 800; border: 2px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">⚙️ Settings</button>
+                </div>
             </div>
             
             <div id="admin-content">
-                <!-- Tabs Navigation -->
-                <div class="tab-container" style="display: flex; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem;">
-                    <button id="tab-exams-btn" class="tab-btn active" style="background: none; border: none; font-family: var(--font); font-size: 1.1rem; font-weight: 800; color: var(--primary); cursor: pointer; padding: 0.5rem 1rem; border-bottom: 3px solid var(--primary); outline: none;">📝 Exam Manager</button>
-                    <button id="tab-questions-btn" class="tab-btn" style="background: none; border: none; font-family: var(--font); font-size: 1.1rem; font-weight: 800; color: var(--text-muted); cursor: pointer; padding: 0.5rem 1rem; border-bottom: 3px solid transparent; outline: none;">❓ Question Manager</button>
-                    <button id="tab-submissions-btn" class="tab-btn" style="background: none; border: none; font-family: var(--font); font-size: 1.1rem; font-weight: 800; color: var(--text-muted); cursor: pointer; padding: 0.5rem 1rem; border-bottom: 3px solid transparent; outline: none;">📊 Results Manager</button>
+                <!-- Tabs Navigation - Pill Style -->
+                <div class="admin-tabs">
+                    <button id="tab-exams-btn" class="admin-tab-btn active">📝 Exam Manager</button>
+                    <button id="tab-questions-btn" class="admin-tab-btn">❓ Question Manager</button>
+                    <button id="tab-submissions-btn" class="admin-tab-btn">📊 Results Manager</button>
+                    <button id="tab-games-btn" class="admin-tab-btn">🎮 Game Manager</button>
                 </div>
 
                 <!-- Tab 1: Exam Manager -->
@@ -387,7 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <input type="file" id="exam-file" name="exam-file" accept=".xlsx, .csv" required style="padding: 0.4rem;">
                             </div>
                             <button type="submit" class="btn-primary" style="margin-bottom: 3px;">Preview File</button>
-                            <button type="button" id="download-sample-btn" class="btn-secondary" style="margin-bottom: 3px; white-space: nowrap;">📥 Tải File Mẫu</button>
+                            <button type="button" id="download-sample-btn" class="btn-secondary" style="margin-bottom: 3px; white-space: nowrap;">📥 Download Sample</button>
                         </form>
 
                         <div id="import-preview-container" style="display: none; border: 2px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; background: #fff; margin-bottom: 1rem;">
@@ -416,6 +651,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <select id="qbm-type-select">
                                 <option value="">All Types</option>
                                 <option value="multiple_choice">Multiple Choice</option>
+                                <option value="single_choice">Single Choice</option>
                                 <option value="true_false">True / False</option>
                                 <option value="fill_blank">Fill Blank</option>
                                 <option value="arrange_sentence">Arrange Sentence</option>
@@ -458,31 +694,38 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p class="loading-message">Loading submissions summary...</p>
                     </div>
                 </div>
+
+                <!-- Tab 4: Game Manager -->
+                <div id="tab-games-content" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 style="margin: 0;">🎮 Game Manager</h3>
+                        <button id="open-create-game-btn" class="btn-primary">+ New Game</button>
+                    </div>
+                    <div id="games-grid-container">
+                        <p class="loading-message">Loading games...</p>
+                    </div>
+                </div>
             </div>
         `;
 
-        // Tab Switching Logic
+        // Pill Tab Switching Logic
+        const allTabBtns = document.querySelectorAll('.admin-tab-btn');
+        const allTabContents = ['tab-exams-content','tab-questions-content','tab-submissions-content','tab-games-content']
+            .map(id => document.getElementById(id));
+
         const tabExamsBtn = document.getElementById('tab-exams-btn');
         const tabQuestionsBtn = document.getElementById('tab-questions-btn');
         const tabSubmissionsBtn = document.getElementById('tab-submissions-btn');
+        const tabGamesBtn = document.getElementById('tab-games-btn');
         const tabExamsContent = document.getElementById('tab-exams-content');
         const tabQuestionsContent = document.getElementById('tab-questions-content');
         const tabSubmissionsContent = document.getElementById('tab-submissions-content');
+        const tabGamesContent = document.getElementById('tab-games-content');
 
         const switchTab = (activeBtn, activeContent) => {
-            [tabExamsBtn, tabQuestionsBtn, tabSubmissionsBtn].forEach(btn => {
-                if (btn) {
-                    btn.classList.remove('active');
-                    btn.style.color = 'var(--text-muted)';
-                    btn.style.borderBottom = '3px solid transparent';
-                }
-            });
-            [tabExamsContent, tabQuestionsContent, tabSubmissionsContent].forEach(c => {
-                if (c) c.style.display = 'none';
-            });
+            allTabBtns.forEach(btn => btn.classList.remove('active'));
+            allTabContents.forEach(c => { if (c) c.style.display = 'none'; });
             activeBtn.classList.add('active');
-            activeBtn.style.color = 'var(--primary)';
-            activeBtn.style.borderBottom = '3px solid var(--primary)';
             activeContent.style.display = 'block';
         };
 
@@ -501,8 +744,29 @@ document.addEventListener('DOMContentLoaded', () => {
             loadSubmissionsExams();
         });
 
+        tabGamesBtn.addEventListener('click', () => {
+            switchTab(tabGamesBtn, tabGamesContent);
+            loadGamesList();
+        });
+
+
         // Settings Button modal trigger
         document.getElementById('open-settings-btn').addEventListener('click', showSettingsModal);
+        
+        // Guide Button modal trigger
+        const guideBtn = document.getElementById('open-guide-btn');
+        if (guideBtn) guideBtn.addEventListener('click', showGuideModal);
+
+        // Logout button
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                if (confirm('Are you sure you want to logout?')) {
+                    sessionStorage.removeItem('teacher_session');
+                    loadLoginScreen();
+                }
+            });
+        }
 
         // Create Exam Button trigger
         document.getElementById('open-create-exam-btn').addEventListener('click', () => showExamModal(null));
@@ -543,6 +807,136 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Initially load exams list
         loadExamsList();
+    }
+
+    const MD_GUIDE_CONTENT = `# Hướng Dẫn Sử Dụng Nền Tảng EnglishTools Teacher Portal
+
+Chào mừng bạn đến với **EnglishTools** - nền tảng quản lý đề thi, ngân hàng câu hỏi, và bài trò chơi trực tuyến. Bộ tài liệu này hướng dẫn chi tiết cách thức vận hành hệ thống.
+
+---
+
+## 1. Hệ Thống Đăng Nhập
+- Hệ thống hỗ trợ đa giáo viên bằng **Mã giáo viên (Teacher ID)** và **Mật khẩu**.
+- Bạn sẽ chỉ thấy Đề thi (Exams) và thông tin của chính mình. Sự cô lập này giúp đảm bảo tính bảo mật khi nhiều giáo viên cùng dùng chung hệ thống.
+
+---
+
+## 2. Quản Lý Đề Thi (Exam Manager)
+Tab **Quản lý Đề thi** là nơi bạn tạo và kết nối đề thi cho học sinh.
+
+### Tạo / Cập nhật Đề thi
+1. Click **"➕ Create New Exam"**.
+2. Nhập các thông tin: **Mã Đề (Exam ID)** (bắt buộc, không dấu hoặc khoảng trắng), **Tiêu đề**, **Thời lượng thi**, và gán **Trạng thái (Active/Inactive)**.
+3. Khi lưu thành công, đề thi sẽ hiện lên bảng.
+
+### Chia sẻ cho Học sinh (Copy Link)
+Tại mỗi đề thi ở bảng có trạng thái **Active**:
+- Hãy bấm nút **"🔗 Copy Link"** (Màu xanh dương đậm).
+- Link được copy (VD: \`student.html?exam_id=ENG_123\`) vừa có thể dán vào Zalo/Facebook gửi cho học sinh.
+- Mẹo: Khi học sinh bấm link này, hệ thống sẽ **Tự động chọn sẵn đề thi** cho học sinh đó, loại bỏ rủi ro học sinh chọn nhầm đề của lớp khác.
+
+---
+
+## 3. Ngân Hàng Câu Hỏi (Question Bank)
+Bạn có thể tự nhập tay hoặc dùng Excel nhập liệu hàng loạt.
+
+### Danh Sách Các Loại Câu Hỏi Hỗ Trợ
+1. **Multiple Choice (\`multiple_choice\`)**: Trắc nghiệm - Học sinh có thể chọn 1 hay *nhiều* hộp kiểm vuông. Đáp án lưu dạng phân tách bởi dấu phẩy (vd: \`A,B\`).
+2. **Single Choice (\`single_choice\`)** *(MỚI)*: Trắc nghiệm - Học sinh chỉ được quyền chọn *duy nhất 1* đáp án từ các nút hình tròn (Radio). Đáp án là 1 kí tự.
+3. **True/False (\`true_false\`)**: Giống Single choice nhưng chỉ có 2 mức Chọn: Đúng và Sai.
+4. **Vocabulary (\`vocabulary\`)**: Nhấn chọn 1 đáp án tròn (radio single-select). Dùng cho từ vựng.
+5. **Fill in Blank (\`fill_blank\`)**: Điền vào chỗ trống. Hệ thống dùng \`accepted_answers\` có định dạng danh sách JSON (Vd: \`["am", "'m"]\`) để học sinh gõ chữ vào. Chấm điểm rà soát tự động theo mảng JSON.
+6. **Arrange Sentence (\`arrange_sentence\`)**: Học sinh gõ lại cả câu hoàn chỉnh dựa trên từ gợi ý.
+7. **Short Answer (\`short_answer\`)**: Câu hỏi tự luận ngắn. Hệ thống sẽ *không* bắt buộc phải có đáp án đúng; giáo viên có thể chấm tay nếu tự luận đặc thù.
+8. **Matching (\`matching\`)**: Dạng kéo thả ghép nối theo cặp Key-Value. Chấp nhận JSON object ở \`accepted_answers\` như \`{"Cat":"Meow", "Dog":"Bark"}\`.
+
+### Chỉnh sửa và Nhập Liệu Câu Hỏi
+- **Click vào "Manage Questions"** ở bảng Exams để mở giao diện quản lý câu hỏi của đề đó.
+- Nút **"Add Question"**: Tạo thêm từng câu hỏi lẻ bằng tay. Giao diện trực quan tích hợp Tooltips giải thích loại câu và ô đỏ báo lỗi điền sai.
+- Nút **"Import Excel"**: Chọn File \`.xlsx\` mẫu. Nếu bạn chưa có file mẫu, hãy nhấp vào chữ **"Download Sample"**. Các cột thiết yếu nhất: \`question_id\`, \`exam_id\`, \`type\`, \`question_text\`. Nhập liệu tự động kiểm tra lỗi trước khi cho phép lưu.
+
+---
+
+## 4. Quản Lý Kết Quả Thi (Submissions)
+Hệ thống cho phép giám sát bài kiểm tra dễ dàng:
+
+1. Vào tab **Submissions Manager**.
+2. Hệ thống thống kê có bao nhiêu học sinh làm bài thi nào, điểm số trung bình ra sao.
+3. **Cơ chế chống Thi Hộ / Thi Nhiều Lần**: Nếu một học sinh dùng cùng Tên + Lớp + Chọn Đề Thi cũ, ứng dụng sẽ từ chối không cho phép thi tiếp.
+4. **Bấm "🔄 Cho làm lại"**: Tính năng của riêng Giáo viên. Tại bảng chi tiết, nếu có học sinh gặp lý do bất khả kháng rớt mạng hoặc giáo viên cho thi lại -> Nhấp **🔄 Cho làm lại** -> Hồ sơ bài đó sẽ được Xoá Vĩnh Viễn để học sinh điền tên tiếp tục được vào làm lại.
+
+---
+
+## 5. Quản Lý Kho Trò Chơi (Game Manager)
+Thêm các hoạt động giải trí hoặc liên kết bài học Quizizz, Gimkit, Wordwall dễ dàng:
+- **Tạo Game**: Tab Game Manager > + New Game. 
+- Chỉ điền **Tên Game**, dán **Đường Link (URL)**, và tải một **Hình Ảnh Đại Diện (Image Box)**.
+- Khi người dùng học sinh bấm vào menu **"Trò chơi"**, kho sẽ tập hợp dạng Game Card lật mở đẹp mắt, kích thích hứng thú vào trải nghiệm Game theo Link do Giáo viên trỏ sẵn.
+
+---
+
+Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mượt mà cùng **EnglishTools**!`;
+
+    window.closeGuideModal = function() {
+        const modal = document.getElementById('guide-modal');
+        if (modal) modal.remove();
+    };
+
+    async function showGuideModal() {
+        let modal = document.getElementById('guide-modal');
+        if (modal) modal.remove();
+
+        modal = document.createElement('div');
+        modal.id = 'guide-modal';
+        modal.className = 'modal';
+        
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 850px; width: 95vw; max-height: 90vh; overflow-y: auto; padding-top: 0;">
+                <div class="modal-header" style="position: sticky; top: 0; background: #ffffff; z-index: 10; padding-top: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1rem;">
+                    <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;"><span style="font-size:1.5rem">📖</span> Hướng Dẫn Sử Dụng EnglishTools</h3>
+                    <button class="modal-close" onclick="closeGuideModal()">&times;</button>
+                </div>
+                <div id="guide-markdown-content" style="padding-bottom: 2rem; line-height: 1.6; font-size: 0.95rem; font-family: var(--font);">
+                    <!-- Content will be injected here -->
+                </div>
+                <div style="text-align: center; margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                    <button class="btn-primary" onclick="closeGuideModal()">Đã Hiểu</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        const contentDiv = document.getElementById('guide-markdown-content');
+        
+        try {
+            // First attempt to fetch the fresh file from network exactly as it is saved on disk.
+            const response = await fetch('Huong_dan_su_dung.md');
+            if (response.ok) {
+                const freshText = await response.text();
+                renderMarkdown(freshText, contentDiv);
+                return;
+            }
+        } catch (e) {
+            console.warn("Could not fetch MD file via network, falling back to embedded robust cache.", e);
+        }
+        
+        // Final fallback if fetch failed (usually due to CORS on file:// origin logic)
+        renderMarkdown(MD_GUIDE_CONTENT, contentDiv);
+    }
+
+    function renderMarkdown(mdText, container) {
+        if (typeof marked !== 'undefined') {
+            container.innerHTML = marked.parse(mdText);
+            // Quick styles for markdown block
+            container.querySelectorAll('h1, h2, h3').forEach(el => { el.style.color = 'var(--primary)'; el.style.marginTop = '1.5em'; el.style.marginBottom = '0.5em'; });
+            container.querySelectorAll('h1').forEach(el => el.style.borderBottom = '2px solid var(--border-color)');
+            container.querySelectorAll('ul, ol').forEach(el => el.style.paddingLeft = '1.5rem');
+            container.querySelectorAll('li').forEach(el => el.style.marginBottom = '0.5rem');
+            container.querySelectorAll('code').forEach(el => { el.style.background = 'var(--secondary-light)'; el.style.padding = '0.2rem 0.4rem'; el.style.borderRadius = 'var(--radius-sm)'; el.style.color = '#c026d3'; el.style.fontWeight = 'bold'; });
+            container.querySelectorAll('strong').forEach(el => el.style.color = 'var(--text-main)');
+        } else {
+            container.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit;">${mdText}</pre>`;
+        }
     }
 
     function showSettingsModal() {
@@ -658,7 +1052,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('exams-table-container');
         if (!container) return;
         
-        showLoader('Đang tải danh sách bài kiểm tra...');
+        showLoader('Loading exams...');
         container.innerHTML = '<p class="loading-message">Loading exams...</p>';
         try {
             const exams = await db.getExams();
@@ -669,7 +1063,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             let table = `
-                <table class="data-table">
+                <div class="table-responsive"><table class="data-table">
                     <thead>
                         <tr>
                             <th>Exam ID</th>
@@ -710,7 +1104,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </tr>
                 `;
             });
-            table += '</tbody></table>';
+            table += '</tbody></table></div>';
             container.innerHTML = table;
         } catch (e) {
             console.error(e);
@@ -732,29 +1126,36 @@ document.addEventListener('DOMContentLoaded', () => {
         const link = `${origin}${pathname}?examId=${examId}`;
         
         navigator.clipboard.writeText(link).then(() => {
-            alert(`Đã sao chép liên kết làm bài cho học sinh:\n${link}`);
+            alert(`Copied student exam link:\n${link}`);
         }).catch(err => {
             console.error('Failed to copy: ', err);
-            alert(`Sao chép liên kết thất bại. Bạn có thể tự sao chép đường dẫn này:\n${link}`);
+            alert(`Failed to copy link. You can copy this URL:\n${link}`);
         });
     };
 
-    window.manageExamQuestions = function(examId) {
+    window.manageExamQuestions = async function(examId) {
+        // Switch to Questions tab using pill-style approach
+        document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
+        ['tab-exams-content','tab-questions-content','tab-submissions-content','tab-games-content']
+            .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
         const tabQuestionsBtn = document.getElementById('tab-questions-btn');
-        if (tabQuestionsBtn) tabQuestionsBtn.click();
-        
-        setTimeout(() => {
-            const select = document.getElementById('qbm-exam-select');
-            if (select) {
-                select.value = examId;
-                loadQuestionBank();
-            }
-        }, 100);
+        const tabQuestionsContent = document.getElementById('tab-questions-content');
+        if (tabQuestionsBtn) tabQuestionsBtn.classList.add('active');
+        if (tabQuestionsContent) tabQuestionsContent.style.display = 'block';
+
+        // Populate dropdown and WAIT for it to finish
+        await populateExamsDropdown();
+
+        const select = document.getElementById('qbm-exam-select');
+        if (select) {
+            select.value = examId;
+            loadQuestionBank();
+        }
     };
 
     window.deleteExam = async function(examId) {
         if (confirm(`⚠️ WARNING: Are you sure you want to delete exam "${examId}"?\nThis will delete the exam record AND all its associated questions permanently!`)) {
-            showLoader('Đang xóa đề thi và câu hỏi liên quan...');
+            showLoader('Deleting exam and related questions...');
             try {
                 await db.deleteExam(examId);
                 alert('Exam and all its questions deleted successfully!');
@@ -765,6 +1166,126 @@ document.addEventListener('DOMContentLoaded', () => {
                 hideLoader();
             }
         }
+    };
+
+    // ─── GAME MANAGER ──────────────────────────────────────────
+    async function loadGamesList() {
+        const container = document.getElementById('games-grid-container');
+        if (!container) return;
+        
+        // Bind create game button before any return statement
+        const createBtn = document.getElementById('open-create-game-btn');
+        if (createBtn) createBtn.onclick = () => showGameModal(null);
+        
+        container.innerHTML = '<p class="loading-message">Loading games...</p>';
+        try {
+            const games = await db.getGames();
+            if (games.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-questions-state">
+                        <span class="empty-icon">🎮</span>
+                        <p>No games yet.</p>
+                        <button class="btn-primary" onclick="showGameModal(null)" style="margin-top:0.5rem;">+ New Game</button>
+                    </div>`;
+                return;
+            }
+            container.innerHTML = '<div class="game-grid">' + games.map(g => `
+                <div class="game-card">
+                    <div class="game-card-img">
+                        ${g.image_url ? `<img src="${g.image_url}" alt="${g.name}" onerror="this.parentElement.innerHTML='🎮'">` : '🎮'}
+                    </div>
+                    <div class="game-card-body">
+                        <p class="game-card-title">${g.name || 'Game'}</p>
+                        <p class="game-card-url" title="${g.url}">🔗 ${g.url || 'N/A'}</p>
+                        <div class="game-card-actions">
+                            <button class="btn-copy-url" onclick="copyGameUrl('${(g.url||'').replace(/'/g,'\\&apos;')}')">📋 Copy URL</button>
+                            <a class="btn-play-game" href="${g.url}" target="_blank" rel="noopener">▶️ Open</a>
+                        </div>
+                        <div class="game-card-actions" style="margin-top:0.3rem;">
+                            <button class="btn-secondary" style="flex:1;font-size:0.8rem;" onclick='showGameModal(${JSON.stringify(g)})'>✏️ Edit</button>
+                            <button class="delete-btn" style="flex:1;font-size:0.8rem;" onclick="deleteGameEntry('${g.game_id}')">🗑 Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('') + '</div>';
+        } catch (err) {
+            container.innerHTML = `<p class="error-message">Error loading game: ${err.message}</p>`;
+        }
+    }
+
+    window.copyGameUrl = function(url) {
+        navigator.clipboard.writeText(url).then(() => alert('Copied URL: ' + url)).catch(() => prompt('Copy URL:', url));
+    };
+
+    window.deleteGameEntry = async function(gameId) {
+        if (!confirm('⚠️ Are you sure you want to delete this game?')) return;
+        showLoader('Deleting game...');
+        try {
+            await db.deleteGame(gameId);
+            loadGamesList();
+        } catch (e) { alert('Error deleting: ' + e.message); }
+        finally { hideLoader(); }
+    };
+
+    window.showGameModal = function(game) {
+        const isEdit = game && game.game_id;
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'game-modal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width:480px;">
+                <div class="modal-header">
+                    <h3>${isEdit ? '✏️ Edit Game' : '+ New Game'}</h3>
+                    <button class="modal-close" onclick="document.getElementById('game-modal').remove()">&times;</button>
+                </div>
+                <form id="game-form" style="background:none;border:none;padding:0;display:flex;flex-direction:column;gap:0;">
+                    <div class="modal-section">
+                        <p class="modal-section-title">🎮 Game Info</p>
+                        <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                            <div>
+                                <label style="font-weight:700;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Game Name <span class="required-star">*</span></label>
+                                <input id="game-name" type="text" value="${isEdit?(game.name||''):''}" placeholder="VD: Kahoot Vocabulary" required
+                                    style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                            </div>
+                            <div>
+                                <label style="font-weight:700;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Game URL <span class="required-star">*</span></label>
+                                <input id="game-url" type="url" value="${isEdit?(game.url||''):''}" placeholder="https://kahoot.it/..." required
+                                    style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                            </div>
+                            <div>
+                                <label style="font-weight:700;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Image URL</label>
+                                <input id="game-image" type="url" value="${isEdit?(game.image_url||''):''}" placeholder="https://...image.png"
+                                    style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                                <p style="font-size:0.78rem;color:var(--text-muted);margin:0.25rem 0 0;">Leave empty if no image — use 🎮 emoji instead.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-actions" style="margin-top:0.5rem;">
+                        <button type="button" class="btn-secondary" onclick="document.getElementById('game-modal').remove()">Cancel</button>
+                        <button type="submit" class="btn-primary">${isEdit ? '💾 Save' : '+ Add'}</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        document.getElementById('game-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const gameData = {
+                game_id: isEdit ? game.game_id : '',
+                name: document.getElementById('game-name').value.trim(),
+                url: document.getElementById('game-url').value.trim(),
+                image_url: document.getElementById('game-image').value.trim()
+            };
+            if (!gameData.name || !gameData.url) { alert('Please enter game name and URL.'); return; }
+            showLoader('Saving game...');
+            try {
+                await db.saveGame(gameData);
+                document.getElementById('game-modal').remove();
+                loadGamesList();
+            } catch (err) { alert('Lỗi: ' + err.message); }
+            finally { hideLoader(); }
+        });
     };
 
     window.showExamModal = function(exam) {
@@ -839,7 +1360,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     await db.editExam(data);
                     alert('Exam details updated successfully!');
                 } else {
-                    data.created_at = new Date().toISOString();
+                    data.created_at = getUTC7ISOString();
                     await db.saveExam(data);
                     alert('New exam created successfully!');
                 }
@@ -905,15 +1426,21 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Check URL params
         const urlParams = new URLSearchParams(window.location.search);
-        const urlExamId = urlParams.get('examId');
+        const urlExamId = urlParams.get('exam_id') || urlParams.get('examId');
+        
         if (urlExamId) {
-            document.getElementById('exam-selection-group').style.display = 'none';
             populateStudentExamsDropdown().then(() => {
                 const selectEl = document.getElementById('exam-select');
-                const selectedOpt = selectEl.options[selectEl.selectedIndex];
-                if (selectedOpt && selectedOpt.value === urlExamId) {
+                // Select the option explicitly
+                selectEl.value = urlExamId;
+                
+                if (selectEl.selectedIndex > 0) { // Found a match
+                    document.getElementById('exam-selection-group').style.display = 'none';
                     document.getElementById('url-exam-info').style.display = 'block';
-                    document.getElementById('url-exam-title').textContent = selectedOpt.textContent;
+                    document.getElementById('url-exam-title').textContent = selectEl.options[selectEl.selectedIndex].textContent.replace(` (${urlExamId})`, '');
+                } else {
+                    // Invalid param, show dropdown
+                    document.getElementById('exam-selection-group').style.display = 'block';
                 }
             });
         } else {
@@ -1219,7 +1746,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         shuffle_options: true,
                         show_result: true,
                         active: true,
-                        created_at: new Date().toISOString()
+                        created_at: getUTC7ISOString()
                     };
                     try {
                         await db.saveExam(newExam);
@@ -1292,7 +1819,7 @@ document.addEventListener('DOMContentLoaded', () => {
         examData.shuffle_options = form.elements.shuffle_options.checked;
         examData.show_result = form.elements.show_result.checked;
         examData.active = form.elements.active.checked;
-        examData.created_at = new Date().toISOString();
+        examData.created_at = getUTC7ISOString();
 
         const submitButton = form.querySelector('button[type="submit"]');
         submitButton.disabled = true;
@@ -1346,6 +1873,21 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const rawQuestions = await db.getQuestions(examId);
             loadedQuestions = rawQuestions.map(decodeQuestionFields);
+
+            if (loadedQuestions.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-questions-state">
+                        <span class="empty-icon">📝</span>
+                        <p>No questions yet for this exam.</p>
+                        <p style="font-size:0.9rem;">Add your first question!</p>
+                        <button class="btn-primary" onclick="document.getElementById('manual-add-question-btn').click()" style="margin-top:0.5rem;">
+                            ➕ Add Question
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
             renderFilteredQuestionBank();
         } catch (error) {
             console.error('Error loading question bank:', error);
@@ -1388,9 +1930,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderQuestionBankTable(questions) {
         const container = document.getElementById('question-bank-container');
+        
+        let bannerHtml = '';
+        const examSelect = document.getElementById('qbm-exam-select');
+        const selectedExamId = examSelect ? examSelect.value : '';
+        
+        if (selectedExamId && examSelect.selectedIndex > 0) {
+            const selectedText = examSelect.options[examSelect.selectedIndex].textContent;
+            const examTitle = selectedText.replace(` (${selectedExamId})`, '');
+            
+            bannerHtml = `
+            <div style="background-color: #f0f7ff; padding: 1.25rem; border-radius: var(--radius); border: 1px solid rgba(77, 150, 255, 0.3); margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                <div>
+                    <h4 style="margin: 0; color: var(--primary); font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem;"><span style="font-size: 1.3rem;">📝</span> ${examTitle}</h4>
+                    <p style="margin: 0.35rem 0 0 0; color: var(--text-muted); font-size: 0.9rem; font-weight: 600;">Exam ID: <strong style="color: var(--text-main);">${selectedExamId}</strong></p>
+                </div>
+                <button class="btn-primary" onclick="copyStudentLink('${selectedExamId}')" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.25rem;">
+                    <span style="font-size: 1.1rem;">🔗</span> Copy Student Link
+                </button>
+            </div>`;
+        }
+
         const headers = ['question_id', 'type', 'level', 'question_text', 'correct_answer', 'points', 'Actions'];
 
-        let table = '<table class="data-table"><thead><tr>';
+        let table = bannerHtml + '<div class="table-responsive"><table class="data-table"><thead><tr>';
         headers.forEach(header => table += `<th>${header.replace(/_/g, ' ').toUpperCase()}</th>`);
         table += '</tr></thead><tbody>';
 
@@ -1413,122 +1976,439 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         });
 
-        table += '</tbody></table>';
+        table += '</tbody></table></div>';
         container.innerHTML = table;
+    }
+
+    const TYPE_HINTS = {
+        multiple_choice: {
+            emoji: '🔤',
+            hint: 'Điền 4 lựa chọn A/B/C/D. Đánh dấu tất cả đáp án đúng tại các nút A B C D bên dưới. Cho phép chọn nhiều đáp án.',
+            optionALabel: 'Option A', optionBLabel: 'Option B', optionCLabel: 'Option C', optionDLabel: 'Option D',
+            optionAPlaceholder: 'Lựa chọn A', optionBPlaceholder: 'Lựa chọn B', optionCPlaceholder: 'Lựa chọn C', optionDPlaceholder: 'Lựa chọn D',
+            correctPlaceholder: 'VD: goes  (text đúng với 1 option ở trên)',
+            acceptedPlaceholder: 'VD: ["A", "B"]',
+            showOptions: true, correctRequired: true
+        },
+        single_choice: {
+            emoji: '🔘',
+            hint: 'Điền 4 lựa chọn A/B/C/D. Chỉ chọn MỘT đáp án đúng tại phần nút bên dưới.',
+            optionALabel: 'Option A', optionBLabel: 'Option B', optionCLabel: 'Option C', optionDLabel: 'Option D',
+            optionAPlaceholder: 'Lựa chọn A', optionBPlaceholder: 'Lựa chọn B', optionCPlaceholder: 'Lựa chọn C', optionDPlaceholder: 'Lựa chọn D',
+            correctPlaceholder: 'VD: goes  (text đúng với 1 option ở trên)',
+            acceptedPlaceholder: 'VD: ["A"]',
+            showOptions: true, correctRequired: true
+        },
+        fill_blank: {
+            emoji: '✏️',
+            hint: 'Để trống Option A-D. Câu hỏi có dạng: "They usually ___ to school." → correct_answer = "walk".',
+            optionALabel:'', optionBLabel:'', optionCLabel:'', optionDLabel:'',
+            optionAPlaceholder:'', optionBPlaceholder:'', optionCPlaceholder:'', optionDPlaceholder:'',
+            correctPlaceholder: 'VD: walk',
+            acceptedPlaceholder: '["walk","walks"]',
+            showOptions: false, correctRequired: true
+        },
+        true_false: {
+            emoji: '☑️',
+            hint: 'Câu hỏi đúng/sai. Correct Answer phải là TRUE hoặc FALSE.',
+            optionALabel:'', optionBLabel:'', optionCLabel:'', optionDLabel:'',
+            optionAPlaceholder:'', optionBPlaceholder:'', optionCPlaceholder:'', optionDPlaceholder:'',
+            correctPlaceholder: 'TRUE hoặc FALSE',
+            acceptedPlaceholder: '["TRUE","True","true"]',
+            showOptions: false, correctRequired: true
+        },
+        vocabulary: {
+            emoji: '📖',
+            hint: 'Giống multiple choice — 4 lựa chọn A/B/C/D về nghĩa của từ. Correct Answer là nghĩa đúng.',
+            optionALabel: 'Nghĩa A', optionBLabel: 'Nghĩa B', optionCLabel: 'Nghĩa C', optionDLabel: 'Nghĩa D',
+            optionAPlaceholder:'Nghĩa 1', optionBPlaceholder:'Nghĩa 2', optionCPlaceholder:'Nghĩa 3', optionDPlaceholder:'Nghĩa 4',
+            correctPlaceholder: 'VD: Thư viện',
+            acceptedPlaceholder: '["Thư viện"]',
+            showOptions: true, correctRequired: true
+        },
+        arrange_sentence: {
+            emoji: '🔀',
+            hint: 'Option A/B/C/D là các từ/cụm từ rời. Correct Answer là câu hoàn chỉnh sau khi sắp xếp.',
+            optionALabel: 'Cụm từ 1', optionBLabel: 'Cụm từ 2', optionCLabel: 'Cụm từ 3', optionDLabel: 'Cụm từ 4',
+            optionAPlaceholder:'VD: We', optionBPlaceholder:'VD: are', optionCPlaceholder:'VD: learning', optionDPlaceholder:'VD: English now .',
+            correctPlaceholder: 'VD: We are learning English now .',
+            acceptedPlaceholder: '["We are learning English now ."]',
+            showOptions: true, correctRequired: true
+        },
+        matching: {
+            emoji: '🔗',
+            hint: 'Option A"key | value", B"key | value"... Correct Answer là JSON: {"cat":"mèo","dog":"chó"}. Có thể để trống để giáo viên chấm.',
+            optionALabel: 'Cặp 1', optionBLabel: 'Cặp 2', optionCLabel: 'Cặp 3', optionDLabel: 'Cặp 4',
+            optionAPlaceholder:'VD: cat | mèo', optionBPlaceholder:'VD: dog | chó', optionCPlaceholder:'VD: bird | chim', optionDPlaceholder:'VD: fish | cá',
+            correctPlaceholder: '{"cat":"mèo","dog":"chó"} (JSON) hoặc để trống',
+            acceptedPlaceholder: '{"cat":"mèo","dog":"chó"}',
+            showOptions: true, correctRequired: false
+        },
+        short_answer: {
+            emoji: '💬',
+            hint: 'Câu hỏi tự luận — để trống Correct Answer nếu giáo viên chấm tay. Options không cần điền.',
+            optionALabel:'', optionBLabel:'', optionCLabel:'', optionDLabel:'',
+            optionAPlaceholder:'', optionBPlaceholder:'', optionCPlaceholder:'', optionDPlaceholder:'',
+            correctPlaceholder: 'Để trống nếu giáo viên chấm tay',
+            acceptedPlaceholder: '',
+            showOptions: false, correctRequired: false
+        }
+    };
+
+    function mkTooltip(text) {
+        return `<span class="tooltip-icon">?<span class="tooltip-text">${text}</span></span>`;
     }
 
     // Modal view for editing or adding question
     window.showEditModal = function(q) {
-        const isEdit = q.hasOwnProperty('question_id') && q.question_id !== undefined;
+        const isEdit = q.question_id !== undefined && q.question_id !== null && q.question_id !== '';
+        // Auto-generate question ID for new questions
+        const autoId = isEdit ? q.question_id : ('Q' + Date.now().toString().slice(-6));
+        const currentType = q.type || 'multiple_choice';
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.id = 'edit-question-modal';
-        
+
         modal.innerHTML = `
-            <div class="modal-content">
+            <div class="modal-content" style="max-width:680px;">
                 <div class="modal-header">
-                    <h3>${isEdit ? 'Edit Question' : 'Add New Question'}</h3>
-                    <button class="modal-close" onclick="closeEditModal()">&times;</button>
+                    <h3>${isEdit ? '✏️ Edit Question' : '➕ Add New Question'}</h3>
+                    <button class="modal-close" onclick="closeEditModal()">&#x2715;</button>
                 </div>
-                <form id="edit-question-form" style="background: none; border: none; padding: 0;">
+                <form id="edit-question-form" style="background:none;border:none;padding:0;display:flex;flex-direction:column;gap:0;">
                     <input type="hidden" name="exam_id" value="${q.exam_id}">
-                    
-                    <label for="edit-question-id">Question ID:</label>
-                    <input type="text" id="edit-question-id" name="question_id" value="${isEdit ? q.question_id : ''}" placeholder="e.g. Q101" ${isEdit ? 'readonly style="background-color:#f3f4f6;"' : ''} required style="width:100%; border:2px solid var(--border-color); border-radius:var(--radius-sm); padding:0.6rem; box-sizing:border-box;">
-                    
-                    <label for="edit-type">Type:</label>
-                    <select id="edit-type" name="type" required>
-                        <option value="multiple_choice" ${(isEdit && q.type === 'multiple_choice') ? 'selected' : ''}>Multiple Choice</option>
-                        <option value="true_false" ${(isEdit && q.type === 'true_false') ? 'selected' : ''}>True / False</option>
-                        <option value="fill_blank" ${(isEdit && q.type === 'fill_blank') ? 'selected' : ''}>Fill in Blank</option>
-                        <option value="arrange_sentence" ${(isEdit && q.type === 'arrange_sentence') ? 'selected' : ''}>Arrange Sentence</option>
-                        <option value="vocabulary" ${(isEdit && q.type === 'vocabulary') ? 'selected' : ''}>Vocabulary</option>
-                        <option value="matching" ${(isEdit && q.type === 'matching') ? 'selected' : ''}>Matching</option>
-                        <option value="short_answer" ${(isEdit && q.type === 'short_answer') ? 'selected' : ''}>Short Answer</option>
-                    </select>
-                    
-                    <label for="edit-level">Level:</label>
-                    <select id="edit-level" name="level">
-                        <option value="easy" ${(isEdit && q.level === 'easy') ? 'selected' : ''}>Easy</option>
-                        <option value="medium" ${(isEdit && q.level === 'medium') ? 'selected' : 'selected'}>Medium</option>
-                        <option value="hard" ${(isEdit && q.level === 'hard') ? 'selected' : ''}>Hard</option>
-                    </select>
-                    
-                    <label for="edit-text">Question Text:</label>
-                    <textarea id="edit-text" name="question_text" required rows="3">${isEdit ? (q.question_text || '') : ''}</textarea>
-                    
-                    <div id="edit-options-fields" style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                        <div>
-                            <label for="edit-option-a">Option A:</label>
-                            <input type="text" id="edit-option-a" name="option_a" value="${isEdit ? (q.option_a || '') : ''}">
-                        </div>
-                        <div>
-                            <label for="edit-option-b">Option B:</label>
-                            <input type="text" id="edit-option-b" name="option_b" value="${isEdit ? (q.option_b || '') : ''}">
-                        </div>
-                        <div>
-                            <label for="edit-option-c">Option C:</label>
-                            <input type="text" id="edit-option-c" name="option_c" value="${isEdit ? (q.option_c || '') : ''}">
-                        </div>
-                        <div>
-                            <label for="edit-option-d">Option D:</label>
-                            <input type="text" id="edit-option-d" name="option_d" value="${isEdit ? (q.option_d || '') : ''}">
+
+                    <!-- Section 1: Basic Info -->
+                    <div class="modal-section">
+                        <p class="modal-section-title">📋 Thông tin cơ bản</p>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+                            <div>
+                                <div class="field-label-row">
+                                    <label for="edit-question-id">Question ID <span class="required-star">*</span></label>
+                                    ${mkTooltip('Mã câu hỏi – duy nhất trong đề thi. Tự động tạo khi thêm mới.')}
+                                </div>
+                                <input type="text" id="edit-question-id" name="question_id"
+                                    value="${autoId}"
+                                    ${isEdit ? 'readonly style="background-color:#f3f4f6;"' : ''}
+                                    required style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                            </div>
+                            <div>
+                                <div class="field-label-row">
+                                    <label for="edit-level">Level <span class="required-star">*</span></label>
+                                    ${mkTooltip('Độ khó: easy (dễ), medium (trung bình), hard (khó).')}
+                                </div>
+                                <select id="edit-level" name="level" style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;font-family:var(--font);">
+                                    <option value="easy" ${q.level==='easy'?'selected':''}>🟢 Easy</option>
+                                    <option value="medium" ${(!q.level||q.level==='medium')?'selected':''}>🟡 Medium</option>
+                                    <option value="hard" ${q.level==='hard'?'selected':''}>🔴 Hard</option>
+                                </select>
+                            </div>
+                            <div style="grid-column:1/-1;">
+                                <div class="field-label-row">
+                                    <label for="edit-type">Type <span class="required-star">*</span></label>
+                                    ${mkTooltip('Loại câu hỏi – ảnh hưởng đến các ô bên dưới.')}
+                                </div>
+                                <select id="edit-type" name="type" required style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;font-family:var(--font);">
+                                    <option value="multiple_choice" ${currentType==='multiple_choice'?'selected':''}>🔤 Multiple Choice</option>
+                                    <option value="single_choice" ${currentType==='single_choice'?'selected':''}>🔘 Single Choice</option>
+                                    <option value="true_false" ${currentType==='true_false'?'selected':''}>☑️ True / False</option>
+                                    <option value="fill_blank" ${currentType==='fill_blank'?'selected':''}>✏️ Fill in Blank</option>
+                                    <option value="arrange_sentence" ${currentType==='arrange_sentence'?'selected':''}>🔀 Arrange Sentence</option>
+                                    <option value="vocabulary" ${currentType==='vocabulary'?'selected':''}>📖 Vocabulary</option>
+                                    <option value="matching" ${currentType==='matching'?'selected':''}>🔗 Matching</option>
+                                    <option value="short_answer" ${currentType==='short_answer'?'selected':''}>💬 Short Answer</option>
+                                </select>
+                                <div id="type-hint-box" class="type-hint-box">
+                                    <span class="hint-icon">💡</span>
+                                    <span id="type-hint-text"></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    
-                    <label for="edit-correct">Correct Answer:</label>
-                    <input type="text" id="edit-correct" name="correct_answer" value="${isEdit ? (q.correct_answer || '') : ''}" required style="width:100%; border:2px solid var(--border-color); border-radius:var(--radius-sm); padding:0.6rem; box-sizing:border-box;">
-                    
-                    <label for="edit-accepted">Accepted Answers (JSON Array / Comma-separated):</label>
-                    <input type="text" id="edit-accepted" name="accepted_answers" value='${isEdit ? (q.accepted_answers || '') : ''}' style="width:100%; border:2px solid var(--border-color); border-radius:var(--radius-sm); padding:0.6rem; box-sizing:border-box;">
-                    
-                    <label for="edit-explanation">Explanation:</label>
-                    <textarea id="edit-explanation" name="explanation" rows="2">${isEdit ? (q.explanation || '') : ''}</textarea>
-                    
-                    <label for="edit-points">Points:</label>
-                    <input type="number" id="edit-points" name="points" value="${isEdit ? (q.points || 1) : 1}" min="1" step="0.5" required style="width:100%; border:2px solid var(--border-color); border-radius:var(--radius-sm); padding:0.6rem; box-sizing:border-box;">
-                    
-                    <label for="edit-tags">Tags (comma-separated):</label>
-                    <input type="text" id="edit-tags" name="tags" value="${isEdit ? (q.tags || '') : ''}" style="width:100%; border:2px solid var(--border-color); border-radius:var(--radius-sm); padding:0.6rem; box-sizing:border-box;">
-                    
-                    <div class="checkbox-wrapper">
-                        <input type="checkbox" id="edit-active" name="active" ${(isEdit ? (q.active === true || q.active === 'TRUE' || q.active === '1' || q.active === 1) : true) ? 'checked' : ''}>
-                        <label for="edit-active">Active</label>
+
+                    <!-- Section 2: Question Content -->
+                    <div class="modal-section">
+                        <p class="modal-section-title">❓ Nội dung câu hỏi</p>
+                        <div class="field-label-row">
+                            <label for="edit-text">Question Text <span class="required-star">*</span></label>
+                            ${mkTooltip('Nội dung câu hỏi. Với fill_blank, dùng ___ để đánh dấu chỗ trống.')}
+                        </div>
+                        <textarea id="edit-text" name="question_text" required rows="3"
+                            style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);resize:vertical;">${isEdit?(q.question_text||''):''}</textarea>
+
+                        <div id="edit-options-fields" style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.75rem;">
+                            <div>
+                                <div class="field-label-row"><label id="lbl-opt-a" for="edit-option-a">Option A</label></div>
+                                <input type="text" id="edit-option-a" name="option_a" value="${isEdit?(q.option_a||''):''}" placeholder="" style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                            </div>
+                            <div>
+                                <div class="field-label-row"><label id="lbl-opt-b" for="edit-option-b">Option B</label></div>
+                                <input type="text" id="edit-option-b" name="option_b" value="${isEdit?(q.option_b||''):''}" placeholder="" style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                            </div>
+                            <div>
+                                <div class="field-label-row"><label id="lbl-opt-c" for="edit-option-c">Option C</label></div>
+                                <input type="text" id="edit-option-c" name="option_c" value="${isEdit?(q.option_c||''):''}" placeholder="" style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                            </div>
+                            <div>
+                                <div class="field-label-row"><label id="lbl-opt-d" for="edit-option-d">Option D</label></div>
+                                <input type="text" id="edit-option-d" name="option_d" value="${isEdit?(q.option_d||''):''}" placeholder="" style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                            </div>
+                        </div>
                     </div>
-                    
-                    <div class="modal-actions" style="grid-column: 1 / -1;">
-                        <button type="button" class="btn-secondary" onclick="closeEditModal()">Cancel</button>
-                        <button type="submit" class="btn-primary">${isEdit ? 'Save Changes' : 'Add Question'}</button>
+
+                    <!-- Section 3: Answer -->
+                    <div class="modal-section">
+                        <p class="modal-section-title">✅ Đáp án</p>
+
+                        <!-- Answer toggle buttons (shown for types that have options) -->
+                        <div id="answer-buttons-area" style="display:none;">
+                            <div class="field-label-row">
+                                <label>Đáp án đúng <span class="required-star">*</span></label>
+                                ${mkTooltip('Click chọn 1 hoặc nhiều đáp án đúng. Với multiple_choice chọn 1. Giáo viên có thể click nhiều nếu muốn nhiều đáp án chấp nhận.')}
+                            </div>
+                            <div id="answer-btn-mc" class="answer-btn-group" style="display:none;">
+                                <button type="button" class="ans-btn" data-key="a">A</button>
+                                <button type="button" class="ans-btn" data-key="b">B</button>
+                                <button type="button" class="ans-btn" data-key="c">C</button>
+                                <button type="button" class="ans-btn" data-key="d">D</button>
+                            </div>
+                            <div id="answer-btn-tf" class="answer-btn-group" style="display:none;">
+                                <button type="button" class="ans-btn-tf" data-val="TRUE">✅ TRUE</button>
+                                <button type="button" class="ans-btn-tf" data-val="FALSE">❌ FALSE</button>
+                            </div>
+                            <p id="answer-selected-display" style="margin:0.4rem 0 0;font-size:0.82rem;color:var(--text-muted);font-weight:600;"></p>
+                        </div>
+
+                        <!-- Manual correct answer (for fill_blank, short_answer, matching, arrange_sentence) -->
+                        <div id="answer-manual-area">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+                                <div>
+                                    <div class="field-label-row">
+                                        <label for="edit-correct" id="lbl-correct">Correct Answer</label>
+                                        ${mkTooltip('Đáp án đúng chính xác. Với matching: JSON {"key":"val"}. Với short_answer: có thể để trống.')}
+                                    </div>
+                                    <input type="text" id="edit-correct" name="correct_answer"
+                                        value="${isEdit?(q.correct_answer||''):''}" placeholder=""
+                                        style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                                </div>
+                                <div>
+                                    <div class="field-label-row">
+                                        <label for="edit-accepted">Accepted Answers</label>
+                                        ${mkTooltip('Các đáp án chấp nhận. Dạng JSON array: ["answer1","answer2"]. Dùng khi có nhiều cách viết đúng.')}
+                                    </div>
+                                    <input type="text" id="edit-accepted" name="accepted_answers"
+                                        value='${isEdit?(q.accepted_answers||''):''}' placeholder='["answer"]'
+                                        style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top:0.75rem;">
+                            <div class="field-label-row">
+                                <label for="edit-explanation">Explanation</label>
+                                ${mkTooltip('Giải thích đáp án – hiển thị cho học sinh sau khi nộp bài (nếu bật Show Result).')}
+                            </div>
+                            <textarea id="edit-explanation" name="explanation" rows="2"
+                                style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);resize:vertical;">${isEdit?(q.explanation||''):''}</textarea>
+                        </div>
+                    </div>
+
+                    <!-- Section 4: Metadata -->
+                    <div class="modal-section">
+                        <p class="modal-section-title">⚙️ Metadata</p>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+                            <div>
+                                <div class="field-label-row">
+                                    <label for="edit-points">Points <span class="required-star">*</span></label>
+                                    ${mkTooltip('Điểm số của câu hỏi này (chấp nhận số thập phân, VD: 1.5).')}
+                                </div>
+                                <input type="number" id="edit-points" name="points"
+                                    value="${isEdit?(q.points||1):1}" min="0.5" step="0.5"
+                                    style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                            </div>
+                            <div>
+                                <div class="field-label-row">
+                                    <label for="edit-tags">Tags</label>
+                                    ${mkTooltip('Nhãn phân loại câu hỏi. Nhiều nhãn cách nhau bằng dấu phẩy: grammar,present-simple')}
+                                </div>
+                                <input type="text" id="edit-tags" name="tags"
+                                    value="${isEdit?(q.tags||''):''}" placeholder="grammar,vocabulary"
+                                    style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                            </div>
+                        </div>
+                        <div class="checkbox-wrapper" style="margin-top:0.75rem;">
+                            <input type="checkbox" id="edit-active" name="active"
+                                ${(isEdit?(q.active===true||q.active==='TRUE'||q.active==='1'||q.active===1):true)?'checked':''}>
+                            <label for="edit-active">Active (hiện câu hỏi này trong bài thi)</label>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions" style="margin-top:0.5rem;">
+                        <button type="button" class="btn-secondary" onclick="closeEditModal()">Hủy</button>
+                        <button type="submit" class="btn-primary">${isEdit ? '💾 Save Changes' : '➕ Add Question'}</button>
                     </div>
                 </form>
             </div>
         `;
-        
+
         document.body.appendChild(modal);
 
-        // Options inputs toggle
+        // Apply type hints on change
         const typeSelect = document.getElementById('edit-type');
-        const optionsFields = document.getElementById('edit-options-fields');
-        const toggleOptions = () => {
-            const val = typeSelect.value;
-            if (val === 'multiple_choice' || val === 'vocabulary' || val === 'matching') {
-                optionsFields.style.display = 'grid';
-            } else {
-                optionsFields.style.display = 'none';
+        const applyTypeHints = (type) => {
+            const cfg = TYPE_HINTS[type] || TYPE_HINTS['multiple_choice'];
+            // Hint box
+            document.getElementById('type-hint-text').textContent = `${cfg.emoji}  ${cfg.hint}`;
+            // Show/hide options
+            const optFields = document.getElementById('edit-options-fields');
+            optFields.style.display = cfg.showOptions ? 'grid' : 'none';
+            // Update option labels and placeholders
+            if (cfg.showOptions) {
+                ['a','b','c','d'].forEach(x => {
+                    const lbl = document.getElementById(`lbl-opt-${x}`);
+                    const inp = document.getElementById(`edit-option-${x}`);
+                    if (lbl) lbl.textContent = cfg[`option${x.toUpperCase()}Label`] || `Option ${x.toUpperCase()}`;
+                    if (inp) inp.placeholder = cfg[`option${x.toUpperCase()}Placeholder`] || '';
+                });
+            }
+            // correct answer label
+            const correctInp = document.getElementById('edit-correct');
+            if (correctInp) correctInp.placeholder = cfg.correctPlaceholder || '';
+            const acceptedInp = document.getElementById('edit-accepted');
+            if (acceptedInp) acceptedInp.placeholder = cfg.acceptedPlaceholder || '';
+            // required star on correct answer label
+            const lblCorrect = document.getElementById('lbl-correct');
+            if (lblCorrect) {
+                lblCorrect.innerHTML = `Correct Answer${cfg.correctRequired ? ' <span class="required-star">*</span>' : ''}`;
             }
         };
-        typeSelect.addEventListener('change', toggleOptions);
-        toggleOptions();
 
-        // Submit form
+        applyTypeHints(currentType);
+
+        // --- ANSWER BUTTONS LOGIC ---
+        function setupAnswerButtons(type) {
+            const btnArea = document.getElementById('answer-buttons-area');
+            const manualArea = document.getElementById('answer-manual-area');
+            const mcGroup = document.getElementById('answer-btn-mc');
+            const tfGroup = document.getElementById('answer-btn-tf');
+            const correctInput = document.getElementById('edit-correct');
+            const acceptedInput = document.getElementById('edit-accepted');
+            const displayEl = document.getElementById('answer-selected-display');
+
+            if (type === 'multiple_choice' || type === 'vocabulary' || type === 'single_choice') {
+                btnArea.style.display = 'block';
+                mcGroup.style.display = 'flex';
+                tfGroup.style.display = 'none';
+                manualArea.style.display = 'none';
+
+                // Pre-select from existing correct_answer / accepted_answers
+                let acceptedVals = [];
+                try {
+                    const rawAcc = acceptedInput.value.trim();
+                    if (rawAcc && rawAcc.startsWith('[') && rawAcc.endsWith(']')) {
+                        const parsed = JSON.parse(rawAcc);
+                        if (Array.isArray(parsed)) {
+                            acceptedVals = parsed.map(v => String(v).trim());
+                        }
+                    }
+                } catch (e) {}
+
+                const currentVal = correctInput.value.trim();
+                mcGroup.querySelectorAll('.ans-btn').forEach(btn => {
+                    const optKey = btn.dataset.key;
+                    const optInput = document.getElementById(`edit-option-${optKey}`);
+                    const optVal = optInput ? optInput.value.trim() : '';
+
+                    if (acceptedVals.length > 0) {
+                        if (optVal && acceptedVals.includes(optVal)) btn.classList.add('selected');
+                        else btn.classList.remove('selected');
+                    } else {
+                        if (currentVal && optVal === currentVal) btn.classList.add('selected');
+                        else btn.classList.remove('selected');
+                    }
+                });
+
+                mcGroup.querySelectorAll('.ans-btn').forEach(btn => {
+                    btn.onclick = () => {
+                        if (type === 'vocabulary' || type === 'single_choice') {
+                            mcGroup.querySelectorAll('.ans-btn').forEach(b => {
+                                if (b !== btn) b.classList.remove('selected');
+                            });
+                        }
+                        btn.classList.toggle('selected');
+                        syncMcButtons();
+                    };
+                });
+
+                syncMcButtons();
+
+            } else if (type === 'true_false') {
+                btnArea.style.display = 'block';
+                mcGroup.style.display = 'none';
+                tfGroup.style.display = 'flex';
+                manualArea.style.display = 'none';
+
+                const currentVal = correctInput.value.trim().toUpperCase();
+                tfGroup.querySelectorAll('.ans-btn-tf').forEach(btn => {
+                    if (btn.dataset.val === currentVal) btn.classList.add('selected');
+                    else btn.classList.remove('selected');
+                });
+
+                tfGroup.querySelectorAll('.ans-btn-tf').forEach(btn => {
+                    btn.onclick = () => {
+                        tfGroup.querySelectorAll('.ans-btn-tf').forEach(b => b.classList.remove('selected'));
+                        btn.classList.add('selected');
+                        correctInput.value = btn.dataset.val;
+                        const alt = btn.dataset.val === 'TRUE'
+                            ? '["TRUE","True","true","T"]'
+                            : '["FALSE","False","false","F"]';
+                        acceptedInput.value = alt;
+                        displayEl.textContent = `Đã chọn: ${btn.dataset.val}`;
+                    };
+                });
+
+            } else {
+                btnArea.style.display = 'none';
+                manualArea.style.display = 'block';
+            }
+
+            function syncMcButtons() {
+                const selected = Array.from(mcGroup.querySelectorAll('.ans-btn.selected'));
+                const values = selected.map(b => {
+                    const optInput = document.getElementById(`edit-option-${b.dataset.key}`);
+                    return optInput ? optInput.value.trim() : '';
+                }).filter(v => v);
+
+                if (values.length === 1) {
+                    correctInput.value = values[0];
+                    acceptedInput.value = JSON.stringify(values);
+                    displayEl.textContent = `Đáp án: ${selected[0].dataset.key.toUpperCase()} — ${values[0]}`;
+                } else if (values.length > 1) {
+                    correctInput.value = values[0];
+                    acceptedInput.value = JSON.stringify(values);
+                    const labels = selected.map(b => b.dataset.key.toUpperCase()).join(', ');
+                    displayEl.textContent = `Đáp án: ${labels} — ${values.join(', ')}`;
+                } else {
+                    correctInput.value = '';
+                    acceptedInput.value = '';
+                    displayEl.textContent = '';
+                }
+            }
+        }
+
+        // Extend applyTypeHints to also setup buttons
+        const origApply = applyTypeHints;
+        const applyAll = (type) => { origApply(type); setupAnswerButtons(type); };
+        typeSelect.removeEventListener('change', () => {});
+        typeSelect.addEventListener('change', () => applyAll(typeSelect.value));
+        applyAll(currentType);
+
         document.getElementById('edit-question-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formEl = e.target;
             const fd = new FormData(formEl);
             const data = {};
-            fd.forEach((val, key) => {
-                data[key] = val;
-            });
+            fd.forEach((val, key) => { data[key] = val; });
             data.active = document.getElementById('edit-active').checked;
             data.points = parseFloat(data.points) || 1;
 
@@ -1538,7 +2418,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     await db.editQuestion(data);
                     alert('Question updated successfully!');
                 } else {
-                    // Check duplicate ID locally
                     if (loadedQuestions.some(lq => String(lq.question_id).trim() === String(data.question_id).trim())) {
                         throw new Error(`Mã câu hỏi '${data.question_id}' đã tồn tại trong đề thi này.`);
                     }
@@ -1622,6 +2501,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const selectedOption = examSelect.options[examSelect.selectedIndex];
         const examData = JSON.parse(selectedOption.dataset.exam);
+
+        // Check if this student already submitted this exam
+        try {
+            const existingSubmissions = await db.getSubmissions();
+            const alreadyDone = existingSubmissions.find(s =>
+                String(s.exam_id) === String(examId) &&
+                String(s.student_name).trim().toLowerCase() === studentName.toLowerCase() &&
+                String(s.class_name).trim().toLowerCase() === className.toLowerCase()
+            );
+            if (alreadyDone) {
+                alert(`⚠️ Bạn (${studentName} - ${className}) đã làm bài kiểm tra này rồi.\nMỗi học sinh chỉ được làm bài 1 lần.\nVui lòng liên hệ giáo viên nếu cần làm lại.`);
+                return;
+            }
+        } catch (e) {
+            console.warn('Could not verify previous submissions:', e);
+            // Allow to continue if check fails (network error etc.)
+        }
 
         let rawQuestions = [];
         try {
@@ -1776,7 +2672,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const decodedQ = decodeQuestionFields(q);
 
         let options = [];
-        if (decodedQ.type === 'multiple_choice' || decodedQ.type === 'vocabulary') {
+        if (decodedQ.type === 'multiple_choice' || decodedQ.type === 'vocabulary' || decodedQ.type === 'single_choice') {
             options = [decodedQ.option_a, decodedQ.option_b, decodedQ.option_c, decodedQ.option_d]
                 .map(opt => opt !== undefined && opt !== null ? String(opt).trim() : '')
                 .filter(opt => opt !== '');
@@ -1909,7 +2805,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let optionsHtml = '';
 
-        if (question.type === 'multiple_choice' || question.type === 'vocabulary') {
+        if (question.type === 'multiple_choice') {
+            // Checkbox multi-select mode
+            const selectedArr = Array.isArray(studentAnswer) ? studentAnswer : (studentAnswer ? [studentAnswer] : []);
+            optionsHtml = '<div class="options-container mc-checkbox">';
+            question.options.forEach(option => {
+                const isSelected = selectedArr.includes(option);
+                optionsHtml += `
+                    <div class="option ${isSelected ? 'selected' : ''}" 
+                         onclick="handleOptionSelect('${escapeSingleQuotes(option)}')">
+                        ${option}
+                    </div>`;
+            });
+            optionsHtml += '</div>';
+
+        } else if (question.type === 'vocabulary' || question.type === 'single_choice') {
+            // Radio single-select mode
             optionsHtml = '<div class="options-container">';
             question.options.forEach(option => {
                 const isSelected = studentAnswer === option;
@@ -2032,10 +2943,23 @@ document.addEventListener('DOMContentLoaded', () => {
         updateNavigationButtons();
     }
 
-    // Handles Option selection (MCQ, True/False, Vocabulary)
+    // Handles Option selection (MCQ multi-select, True/False single, Vocabulary single)
     window.handleOptionSelect = function(option) {
-        const { currentQuestionIndex } = window.currentExamState;
-        window.currentExamState.answers[currentQuestionIndex] = option;
+        const { currentQuestionIndex, questions } = window.currentExamState;
+        const question = questions[currentQuestionIndex];
+
+        if (question.type === 'multiple_choice') {
+            // Toggle in array for multi-select
+            let current = window.currentExamState.answers[currentQuestionIndex];
+            if (!Array.isArray(current)) current = current ? [current] : [];
+            const idx = current.indexOf(option);
+            if (idx >= 0) current.splice(idx, 1);
+            else current.push(option);
+            window.currentExamState.answers[currentQuestionIndex] = current;
+        } else {
+            // Single select for vocabulary, true_false
+            window.currentExamState.answers[currentQuestionIndex] = option;
+        }
         saveDraft();
         renderCurrentQuestion();
     };
@@ -2276,21 +3200,32 @@ document.addEventListener('DOMContentLoaded', () => {
             if (student_answer === null || student_answer === '' || (typeof student_answer === 'string' && student_answer.trim() === '')) {
                 unanswered_count++;
             } else {
-                if (q.type === 'multiple_choice' || q.type === 'true_false' || q.type === 'vocabulary') {
-                    // Check direct match
+                if (q.type === 'multiple_choice') {
+                    // Multi-select: all-or-nothing comparison
+                    let studentArr = Array.isArray(student_answer) ? student_answer : [student_answer];
+                    studentArr = studentArr.map(normalizeAnswer).sort();
+                    // Build accepted set from accepted_answers or correct_answer
+                    let acceptedArr = [];
+                    if (q.accepted_answers && q.accepted_answers.length > 0) {
+                        acceptedArr = q.accepted_answers.map(normalizeAnswer).sort();
+                    } else {
+                        acceptedArr = [normalizeAnswer(correct_answer)];
+                    }
+                    if (JSON.stringify(studentArr) === JSON.stringify(acceptedArr)) {
+                        is_correct = true;
+                        points_earned = points;
+                    }
+
+                } else if (q.type === 'true_false' || q.type === 'vocabulary' || q.type === 'single_choice') {
                     if (normalizeAnswer(student_answer) === normalizeAnswer(correct_answer)) {
                         is_correct = true;
-                    } else {
-                        // Check if correct answer option is a letter e.g., A/B/C/D or maps options
-                        // Verify if correct_answer matches option letter mapping
-                        if (q.type === 'multiple_choice' || q.type === 'vocabulary') {
-                            const optionLetters = ['a', 'b', 'c', 'd'];
-                            const correctLetterIdx = optionLetters.indexOf(normalizeAnswer(correct_answer));
-                            if (correctLetterIdx !== -1) {
-                                const mappedVal = q.options[correctLetterIdx];
-                                if (normalizeAnswer(student_answer) === normalizeAnswer(mappedVal)) {
-                                    is_correct = true;
-                                }
+                    } else if (q.type === 'vocabulary' || q.type === 'single_choice') {
+                        const optionLetters = ['a', 'b', 'c', 'd'];
+                        const correctLetterIdx = optionLetters.indexOf(normalizeAnswer(correct_answer));
+                        if (correctLetterIdx !== -1) {
+                            const mappedVal = q.options[correctLetterIdx];
+                            if (normalizeAnswer(student_answer) === normalizeAnswer(mappedVal)) {
+                                is_correct = true;
                             }
                         }
                     }
@@ -2404,7 +3339,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 unanswered_count: unanswered_count,
                 manual_review_count: manual_review_count,
                 duration_seconds: durationSeconds,
-                submitted_at: new Date().toISOString()
+                submitted_at: getUTC7ISOString()
             },
             details: detailed_results
         };
@@ -2599,7 +3534,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             statusDiv.className = 'sync-pending';
-            statusDiv.innerHTML = `<span>⏳ Gửi dữ liệu điểm số lên Google Sheets...</span>`;
+            statusDiv.innerHTML = `<span>⏳ Gửi dữ liệu điểm số lên Server...</span>`;
             
             const responseData = await db.submitResult(result);
 
@@ -2608,7 +3543,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (responseData.message && responseData.message.toLowerCase().includes('local')) {
                     statusDiv.innerHTML = `<span>💾 Đã lưu bài làm thành công trên thiết bị (Chế độ Ngoại tuyến).</span>`;
                 } else {
-                    statusDiv.innerHTML = `<span>✅ Kết quả đã đồng bộ thành công lên Google Sheets!</span>`;
+                    statusDiv.innerHTML = `<span>✅ Kết quả đã đồng bộ thành công lên Server!</span>`;
                 }
                 
                 // Clear from pending submissions if it was there
@@ -2731,7 +3666,7 @@ document.addEventListener('DOMContentLoaded', () => {
             indicator.style.color = '#b45309';
             indicator.style.border = '1px solid rgba(217, 119, 6, 0.3)';
         } else {
-            indicator.innerHTML = '🌐 Cloud Connected (Google Sheets)';
+            indicator.innerHTML = '🌐 Cloud Connected (Server)';
             indicator.style.backgroundColor = 'var(--secondary-light)';
             indicator.style.color = '#15803d';
             indicator.style.border = '1px solid rgba(107, 203, 119, 0.3)';
@@ -2752,7 +3687,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     shuffle_options: true,
                     show_result: true,
                     active: true,
-                    created_at: new Date().toISOString()
+                    created_at: getUTC7ISOString()
                 },
                 {
                     exam_id: 'ENG_UNIT_2',
@@ -2762,7 +3697,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     shuffle_options: false,
                     show_result: true,
                     active: true,
-                    created_at: new Date().toISOString()
+                    created_at: getUTC7ISOString()
                 }
             ];
             localStorage.setItem('mock_exams', JSON.stringify(sampleExams));
@@ -2892,6 +3827,33 @@ document.addEventListener('DOMContentLoaded', () => {
             ];
             localStorage.setItem('mock_questions', JSON.stringify(sampleQuestions));
         }
+
+        // Seed mock teachers if not set
+        if (!localStorage.getItem('mock_teachers')) {
+            localStorage.setItem('mock_teachers', JSON.stringify([
+                { username: 'demo', password: 'demo123', name: 'Giáo viên Demo', phone: '0900000000' }
+            ]));
+        }
+
+        // Seed mock games if not set
+        if (!localStorage.getItem('mock_games')) {
+            localStorage.setItem('mock_games', JSON.stringify([
+                {
+                    game_id: 'GAME_1',
+                    name: 'Kahoot - Vocabulary Practice',
+                    url: 'https://kahoot.it/',
+                    image_url: '',
+                    created_at: getUTC7ISOString()
+                },
+                {
+                    game_id: 'GAME_2',
+                    name: 'Quizizz - Grammar Challenge',
+                    url: 'https://quizizz.com/',
+                    image_url: '',
+                    created_at: getUTC7ISOString()
+                }
+            ]));
+        }
     }
 
     async function loadSubmissionsExams() {
@@ -2901,7 +3863,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const backBtn = document.getElementById('back-to-submissions-summary-btn');
         if (backBtn) backBtn.style.display = 'none';
         
-        showLoader('Đang tải danh sách kết quả đề thi...');
+        showLoader('Loading exams and submission counts...');
         document.getElementById('submissions-title').textContent = 'Student Submissions Summary';
         container.innerHTML = '<p class="loading-message">Loading exams and submission counts...</p>';
         
@@ -2915,7 +3877,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             let table = `
-                <table class="data-table">
+                <div class="table-responsive"><table class="data-table">
                     <thead>
                         <tr>
                             <th>Exam ID</th>
@@ -2947,7 +3909,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </tr>
                 `;
             });
-            table += '</tbody></table>';
+            table += '</tbody></table></div>';
             container.innerHTML = table;
         } catch (e) {
             console.error(e);
@@ -2967,7 +3929,7 @@ document.addEventListener('DOMContentLoaded', () => {
             backBtn.onclick = () => loadSubmissionsExams();
         }
         
-        showLoader('Đang tải danh sách kết quả học sinh...');
+        showLoader('Loading student submissions...');
         document.getElementById('submissions-title').textContent = `Submissions for Exam: ${examId}`;
         container.innerHTML = '<p class="loading-message">Loading student submissions...</p>';
         
@@ -2981,7 +3943,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             let table = `
-                <table class="data-table">
+                <div class="table-responsive"><table class="data-table">
                     <thead>
                         <tr>
                             <th>Student Name</th>
@@ -3014,15 +3976,31 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td style="font-size: 0.85rem; color: var(--text-muted);">${submittedDate}</td>
                         <td>
                             <button class="edit-btn" onclick="viewSubmissionDetailsModal('${sub.submission_id}', '${escapeSingleQuotes(sub.student_name)}', '${escapeSingleQuotes(sub.exam_title || examId)}')">View Answers</button>
+                            <button class="delete-btn" onclick="deleteSubmissionEntry('${sub.submission_id}', '${escapeSingleQuotes(sub.student_name)}', '${examId}')" title="Xoá kết quả & cho học sinh làm lại">🔄 Reset</button>
                         </td>
                     </tr>
                 `;
             });
-            table += '</tbody></table>';
+            table += '</tbody></table></div>';
             container.innerHTML = table;
         } catch (e) {
             console.error(e);
             container.innerHTML = `<p class="error-message">Error loading exam submissions: ${e.message}</p>`;
+        } finally {
+            hideLoader();
+        }
+    };
+
+    window.deleteSubmissionEntry = async function(submissionId, studentName, examId) {
+        if (!confirm(`⚠️ Are you sure you want to delete the results of "${studentName}" and allow this student to retake the test?\n\nThis action cannot be undone!`)) return;
+
+        showLoader('Deleting submission...');
+        try {
+            await db.deleteSubmission(submissionId);
+            alert(`✅ Deleted results of "${studentName}". This student can retake the test.`);
+            viewExamSubmissions(examId);
+        } catch (err) {
+            alert('Error deleting submission: ' + err.message);
         } finally {
             hideLoader();
         }
@@ -3050,7 +4028,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(modal);
         
         const container = document.getElementById('modal-submission-details-container');
-        showLoader('Đang tải chi tiết bài làm học sinh...');
+        showLoader('Loading answer details...');
         try {
             const details = await db.getSubmissionDetails(submissionId);
             if (details.length === 0) {
@@ -3325,7 +4303,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isStudentPage) {
         loadStudentMode();
     } else {
-        loadAdminMode();
+        // Check teacher session
+        const existingSession = sessionStorage.getItem('teacher_session');
+        if (existingSession) {
+            loadAdminMode();
+        } else {
+            loadLoginScreen();
+        }
     }
 
     // Try to sync pending results automatically
@@ -3338,3 +4322,8 @@ document.addEventListener('DOMContentLoaded', () => {
         gradeExam
     };
 });
+
+
+
+
+

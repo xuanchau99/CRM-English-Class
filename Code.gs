@@ -6,11 +6,14 @@ function doGet(e) {
   try {
     switch (action) {
       case 'getExams':
-        return createJsonResponse({ status: 'success', data: getExams() });
+        const teacherId = e.parameter.teacherId || '';
+        return createJsonResponse({ status: 'success', data: getExams(teacherId) });
       case 'getQuestions':
         const examId = e.parameter.examId;
         if (!examId) throw new Error('examId parameter is required for getQuestions.');
         return createJsonResponse({ status: 'success', data: getQuestions(examId) });
+      case 'getGames':
+        return createJsonResponse({ status: 'success', data: getGames() });
       case 'getSubmissions':
         return createJsonResponse({ status: 'success', data: getSubmissions() });
       case 'getSubmissionDetails':
@@ -34,6 +37,8 @@ function doPost(e) {
 
   try {
     switch (action) {
+      case 'login':
+        return createJsonResponse(loginTeacher(payload));
       case 'saveExam':
         return createJsonResponse(saveExam(payload));
       case 'importQuestions':
@@ -48,6 +53,12 @@ function doPost(e) {
         return createJsonResponse(editExam(payload));
       case 'deleteExam':
         return createJsonResponse(deleteExam(payload));
+      case 'saveGame':
+        return createJsonResponse(saveGame(payload));
+      case 'deleteGame':
+        return createJsonResponse(deleteGame(payload));
+      case 'deleteSubmission':
+        return createJsonResponse(deleteSubmission(payload));
       default:
         throw new Error('Invalid action for POST request: ' + action);
     }
@@ -67,7 +78,10 @@ function getSheet(sheetName) {
     // Add headers if the sheet is new
     switch (sheetName) {
       case 'Exams':
-        sheet.appendRow(['exam_id', 'title', 'duration_minutes', 'shuffle_questions', 'shuffle_options', 'show_result', 'active', 'created_at']);
+        sheet.appendRow(['exam_id', 'title', 'duration_minutes', 'shuffle_questions', 'shuffle_options', 'show_result', 'active', 'teacher_id', 'created_at']);
+        break;
+      case 'Teachers':
+        sheet.appendRow(['username', 'password', 'name', 'phone']);
         break;
       case 'Questions':
         sheet.appendRow(['question_id', 'exam_id', 'type', 'level', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer', 'accepted_answers', 'explanation', 'points', 'tags', 'active']);
@@ -77,6 +91,9 @@ function getSheet(sheetName) {
         break;
       case 'SubmissionDetails':
         sheet.appendRow(['submission_id', 'question_id', 'question_type', 'question_text', 'student_answer', 'correct_answer', 'is_correct', 'need_manual_review', 'points', 'points_earned', 'explanation']);
+        break;
+      case 'ManagerGames':
+        sheet.appendRow(['game_id', 'name', 'url', 'image_url', 'created_at']);
         break;
     }
   }
@@ -100,9 +117,41 @@ function getRowsData(sheet) {
 }
 
 // --- API Functions ---
-function getExams() {
+
+// Auto-add teacher_id column to Exams sheet if missing
+function ensureExamsHasTeacherIdColumn() {
   const sheet = getSheet('Exams');
-  return getRowsData(sheet);
+  const lastCol = sheet.getLastColumn();
+  if (lastCol === 0) return; // empty sheet
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  if (!headers.includes('teacher_id')) {
+    // Insert teacher_id before created_at (or append at end)
+    const createdAtIdx = headers.indexOf('created_at');
+    const insertCol = createdAtIdx >= 0 ? createdAtIdx + 1 : lastCol + 1;
+    sheet.insertColumnBefore(insertCol);
+    sheet.getRange(1, insertCol).setValue('teacher_id');
+  }
+}
+
+function getExams(teacherId) {
+  ensureExamsHasTeacherIdColumn();
+  const sheet = getSheet('Exams');
+  const all = getRowsData(sheet);
+  if (teacherId) {
+    return all.filter(function(e) { return String(e.teacher_id) === String(teacherId); });
+  }
+  return all;
+}
+
+function loginTeacher(payload) {
+  const sheet = getSheet('Teachers');
+  const teachers = getRowsData(sheet);
+  const teacher = teachers.find(function(t) {
+    return String(t.username).trim() === String(payload.username).trim() &&
+           String(t.password).trim() === String(payload.password).trim();
+  });
+  if (!teacher) throw new Error('Tên đăng nhập hoặc mật khẩu không đúng.');
+  return { status: 'success', data: { username: teacher.username, name: teacher.name, phone: teacher.phone } };
 }
 
 function getQuestions(examId) {
@@ -112,6 +161,7 @@ function getQuestions(examId) {
 }
 
 function saveExam(examPayload) {
+  ensureExamsHasTeacherIdColumn();
   const sheet = getSheet('Exams');
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const newRow = [];
@@ -142,7 +192,7 @@ function importQuestions(questionsPayload) {
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const existingQuestions = getRowsData(sheet);
   const appendedQuestions = [];
-  const validTypes = ['multiple_choice', 'true_false', 'fill_blank', 'arrange_sentence', 'vocabulary', 'matching', 'short_answer'];
+  const validTypes = ['multiple_choice', 'single_choice', 'true_false', 'fill_blank', 'arrange_sentence', 'vocabulary', 'matching', 'short_answer'];
 
   for (let i = 0; i < questionsPayload.length; i++) {
     const question = questionsPayload[i];
@@ -179,9 +229,8 @@ function importQuestions(questionsPayload) {
           const strVal = String(value).trim();
           if (strVal.toLowerCase() === 'true') value = true;
           else if (strVal.toLowerCase() === 'false') value = false;
-          else if (header === 'accepted_answers' && strVal.startsWith('[') && strVal.endsWith(']')) {
-            try { value = JSON.parse(strVal); } catch (e) {}
-          }
+          // Keep accepted_answers as string — do NOT parse to array
+          // GAS appendRow converts JS arrays to Java arrays → shows as [Ljava.lang.Object;@...
         } catch (e) {}
       }
       newRow.push(value !== undefined ? value : '');
@@ -357,6 +406,52 @@ function deleteExam(examPayload) {
   return { status: 'success', message: 'Exam and all its questions deleted successfully', exam_id: examId };
 }
 
+function getGames() {
+  const sheet = getSheet('ManagerGames');
+  return getRowsData(sheet);
+}
+
+function saveGame(gamePayload) {
+  const sheet = getSheet('ManagerGames');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const existing = getRowsData(sheet);
+
+  const isEdit = existing.some(g => String(g.game_id) === String(gamePayload.game_id));
+  if (isEdit) {
+    // Update existing row
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      const idColIdx = headers.indexOf('game_id');
+      if (String(rows[i][idColIdx]) === String(gamePayload.game_id)) {
+        headers.forEach((h, j) => {
+          if (gamePayload[h] !== undefined) sheet.getRange(i + 1, j + 1).setValue(gamePayload[h]);
+        });
+        break;
+      }
+    }
+  } else {
+    if (!gamePayload.game_id) gamePayload.game_id = 'GAME_' + Date.now();
+    if (!gamePayload.created_at) gamePayload.created_at = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd'T'HH:mm:ssXXX");
+    const newRow = headers.map(h => gamePayload[h] !== undefined ? gamePayload[h] : '');
+    sheet.appendRow(newRow);
+  }
+  return { status: 'success', message: 'Game saved', game_id: gamePayload.game_id };
+}
+
+function deleteGame(payload) {
+  const sheet = getSheet('ManagerGames');
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows[0];
+  const idColIdx = headers.indexOf('game_id');
+  for (let i = rows.length - 1; i >= 1; i--) {
+    if (String(rows[i][idColIdx]) === String(payload.game_id)) {
+      sheet.deleteRow(i + 1);
+      return { status: 'success', message: 'Game deleted', game_id: payload.game_id };
+    }
+  }
+  throw new Error(`Game '${payload.game_id}' not found.`);
+}
+
 function getSubmissions() {
   const sheet = getSheet('Submissions');
   return getRowsData(sheet);
@@ -366,6 +461,34 @@ function getSubmissionDetails(submissionId) {
   const sheet = getSheet('SubmissionDetails');
   const allDetails = getRowsData(sheet);
   return allDetails.filter(d => String(d.submission_id) === String(submissionId));
+}
+
+function deleteSubmission(payload) {
+  const submissionId = payload.submission_id;
+  if (!submissionId) throw new Error('submission_id is required.');
+
+  const subSheet = getSheet('Submissions');
+  const subRows = subSheet.getDataRange().getValues();
+  let subRowIdx = -1;
+  for (let i = 1; i < subRows.length; i++) {
+    if (String(subRows[i][0]) === String(submissionId)) {
+      subRowIdx = i + 1;
+      break;
+    }
+  }
+  if (subRowIdx !== -1) {
+    subSheet.deleteRow(subRowIdx);
+  }
+
+  const detailsSheet = getSheet('SubmissionDetails');
+  const detailsRows = detailsSheet.getDataRange().getValues();
+  for (let i = detailsRows.length - 1; i >= 1; i--) {
+    if (String(detailsRows[i][0]) === String(submissionId)) {
+      detailsSheet.deleteRow(i + 1);
+    }
+  }
+
+  return { status: 'success', message: 'Submission deleted successfully', submission_id: submissionId };
 }
 
 // --- Response Helpers ---
