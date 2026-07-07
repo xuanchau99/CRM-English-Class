@@ -121,8 +121,7 @@ nav button.active {
 /* Main Container */
 main {
     padding: 2rem;
-    max-width: 1000px;
-    margin: 0 auto 3rem auto;
+    margin: 2rem 6rem;
     background-color: var(--bg-card);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
@@ -951,7 +950,7 @@ form button {
 
 .delete-btn {
     background-color: var(--accent-light);
-    color: var(--accent);
+    color: #b45309;
 }
 
 .delete-btn:hover {
@@ -1377,10 +1376,17 @@ form button {
     flex-shrink: 0;
 }
 
+.teacher-info-bar .teacher-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
 .teacher-info-bar .logout-btn {
     margin-left: auto;
     background: var(--accent-light);
-    color: var(--accent);
+    color: #b45309;
     border: 1.5px solid rgba(255, 107, 138, 0.25);
     border-radius: 6px;
     padding: 0.3rem 0.75rem;
@@ -1835,6 +1841,16 @@ form button {
     color: #fff;
 }
 
+/* Footer */
+footer {
+    text-align: center;
+    padding: 1rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border-color);
+    margin-top: 2rem;
+}
+
 /* =========================================================================
    RESPONSIVE DESIGN (MOBILE & TABLET)
    ========================================================================= */
@@ -1858,7 +1874,7 @@ form button {
 @media (max-width: 900px) {
     #app-container {
         padding: 1rem;
-        margin: 1rem auto;
+        margin: 1rem;
     }
 
     header h1 {

@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const teachers = JSON.parse(localStorage.getItem('mock_teachers') || '[]');
                 const teacher = teachers.find(t => String(t.username).trim() === String(username).trim() && String(t.password).trim() === String(password).trim());
                 if (!teacher) throw new Error('Tên đăng nhập hoặc mật khẩu không đúng.');
-                return { username: teacher.username, name: teacher.name, phone: teacher.phone };
+                return { username: teacher.username, name: teacher.name, phone: teacher.phone, avatar: teacher.avatar };
             }
             try {
                 const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
@@ -576,11 +576,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadAdminMode() {
         const session = JSON.parse(sessionStorage.getItem('teacher_session') || 'null');
         const teacherName = session ? session.name : 'Admin';
-        const teacherInitial = teacherName.slice(0, 1).toUpperCase();
+        const teacherAvatar = session ? session.avatar : 'Admin';
 
         appContainer.innerHTML = `
             <div class="teacher-info-bar">
-                <div class="teacher-avatar">${teacherInitial}</div>
+                <div class="teacher-avatar"><img src="${teacherAvatar}" alt="${teacherName}"></div>
                 <span>Hello, <strong>${teacherName}</strong></span>
                 <button class="logout-btn" id="logout-btn">🚪 Logout</button>
             </div>
@@ -604,8 +604,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <!-- Tab 1: Exam Manager -->
                 <div id="tab-exams-content">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h3>Active Exams</h3>
-                        <button id="open-create-exam-btn" class="btn-primary">➕ Create New Exam</button>
+                        <h3>All Exams</h3>
+                        <button id="open-create-exam-btn" class="btn-primary">+ Create New Exam</button>
                     </div>
                     <div id="exams-table-container" class="data-table-container">
                         <p class="loading-message">Loading exams list...</p>
@@ -636,7 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <h3 style="margin: 0;">Question Bank Search & Filters</h3>
-                        <button id="manual-add-question-btn" class="btn-primary" style="background-color: var(--secondary); box-shadow: 0 4px 12px rgba(107, 203, 119, 0.2);">➕ Add Question Manually</button>
+                        <button id="manual-add-question-btn" class="btn-primary" style="background-color: var(--secondary); box-shadow: 0 4px 12px rgba(107, 203, 119, 0.2);">+ Add Question Manually</button>
                     </div>
 
                     <div class="filter-container">
@@ -825,7 +825,7 @@ Chào mừng bạn đến với **EnglishTools** - nền tảng quản lý đề
 Tab **Quản lý Đề thi** là nơi bạn tạo và kết nối đề thi cho học sinh.
 
 ### Tạo / Cập nhật Đề thi
-1. Click **"➕ Create New Exam"**.
+1. Click **"+ Create New Exam"**.
 2. Nhập các thông tin: **Mã Đề (Exam ID)** (bắt buộc, không dấu hoặc khoảng trắng), **Tiêu đề**, **Thời lượng thi**, và gán **Trạng thái (Active/Inactive)**.
 3. Khi lưu thành công, đề thi sẽ hiện lên bảng.
 
@@ -1055,7 +1055,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         showLoader('Loading exams...');
         container.innerHTML = '<p class="loading-message">Loading exams...</p>';
         try {
-            const exams = await db.getExams();
+            const examsResponse = await db.getExams();
+            const exams = examsResponse.sort((a, b) => new Date(b.created_at || parseInt((b.exam_id||'').split('_').pop()) || 0) - new Date(a.created_at || parseInt((a.exam_id||'').split('_').pop()) || 0));
             if (exams.length === 0) {
                 container.innerHTML = '<p class="info-message">No exams found. Click "Create New Exam" to create one!</p>';
                 hideLoader();
@@ -1095,7 +1096,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         <td style="font-size:0.85rem; color:var(--text-muted);">${formattedDate}</td>
                         <td>
                             <div style="display:flex; gap:0.25rem; flex-wrap:wrap;">
-                                <button class="edit-btn" onclick='showExamModal(${examStr})'>Edit</button>
+                                <button class="edit-btn" onclick='showExamModal(${examStr})'>🖍</button>
                                 <button class="edit-btn" style="background-color:var(--primary); color:white;" onclick="manageExamQuestions('${exam.exam_id}')">Manage Questions</button>
                                 <button class="edit-btn" style="background-color:var(--secondary); color:white;" onclick="copyStudentLink('${exam.exam_id}')">🔗 Copy Link</button>
                                 <button class="delete-btn" onclick="deleteExam('${exam.exam_id}')">Delete</button>
@@ -1179,7 +1180,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         
         container.innerHTML = '<p class="loading-message">Loading games...</p>';
         try {
-            const games = await db.getGames();
+            const gamesResp = await db.getGames();
+            const games = gamesResp.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
             if (games.length === 0) {
                 container.innerHTML = `
                     <div class="empty-questions-state">
@@ -1725,7 +1727,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         confirmBtn.disabled = true;
         confirmBtn.textContent = 'Importing...';
 
-        showLoader('Đang nhập danh sách câu hỏi vào hệ thống...');
+        showLoader('Importing questions...');
         const autoCreated = []; // track for rollback
         try {
             // ── Auto-create exams for any exam_id that doesn't exist yet ──
@@ -1867,7 +1869,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             return;
         }
 
-        showLoader('Đang tải danh sách câu hỏi...');
+        showLoader('Loading questions...');
         container.innerHTML = '<p class="loading-message">Loading questions...</p>';
 
         try {
@@ -1881,7 +1883,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         <p>No questions yet for this exam.</p>
                         <p style="font-size:0.9rem;">Add your first question!</p>
                         <button class="btn-primary" onclick="document.getElementById('manual-add-question-btn').click()" style="margin-top:0.5rem;">
-                            ➕ Add Question
+                            + Add Question
                         </button>
                     </div>
                 `;
@@ -2244,8 +2246,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     </div>
 
                     <div class="modal-actions" style="margin-top:0.5rem;">
-                        <button type="button" class="btn-secondary" onclick="closeEditModal()">Hủy</button>
-                        <button type="submit" class="btn-primary">${isEdit ? '💾 Save Changes' : '➕ Add Question'}</button>
+                        <button type="button" class="btn-secondary" onclick="closeEditModal()">Cancel</button>
+                        <button type="submit" class="btn-primary">${isEdit ? '💾 Save Changes' : '+ Add Question'}</button>
                     </div>
                 </form>
             </div>
@@ -3868,7 +3870,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         container.innerHTML = '<p class="loading-message">Loading exams and submission counts...</p>';
         
         try {
-            const exams = await db.getExams();
+            const examsResp = await db.getExams();
+            const exams = examsResp.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
             const submissions = await db.getSubmissions();
             
             if (exams.length === 0) {
@@ -3934,10 +3937,12 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         container.innerHTML = '<p class="loading-message">Loading student submissions...</p>';
         
         try {
-            const allSubmissions = await db.getSubmissions();
-            const submissions = allSubmissions.filter(s => String(s.exam_id) === String(examId));
+            const submissions = await db.getSubmissions();
+            const examSubs = submissions
+                .filter(s => String(s.exam_id) === String(examId))
+                .sort((a, b) => new Date(b.submitted_at || 0) - new Date(a.submitted_at || 0));
             
-            if (submissions.length === 0) {
+            if (examSubs.length === 0) {
                 container.innerHTML = '<p class="info-message">No student submissions found for this exam yet.</p>';
                 return;
             }
@@ -3958,7 +3963,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     <tbody>
             `;
 
-            submissions.forEach(sub => {
+            examSubs.forEach(sub => {
                 const score = sub.score !== undefined ? sub.score : 'N/A';
                 const percentage = sub.percentage !== undefined ? sub.percentage : 'N/A';
                 const minutes = Math.floor(sub.duration_seconds / 60);
@@ -4322,6 +4327,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         gradeExam
     };
 });
+
 
 
 

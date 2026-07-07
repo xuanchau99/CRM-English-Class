@@ -151,7 +151,7 @@ function loginTeacher(payload) {
            String(t.password).trim() === String(payload.password).trim();
   });
   if (!teacher) throw new Error('Tên đăng nhập hoặc mật khẩu không đúng.');
-  return { status: 'success', data: { username: teacher.username, name: teacher.name, phone: teacher.phone } };
+  return { status: 'success', data: { username: teacher.username, name: teacher.name, phone: teacher.phone, avatar: teacher.avatar } };
 }
 
 function getQuestions(examId) {
@@ -380,7 +380,7 @@ function editExam(examPayload) {
 function deleteExam(examPayload) {
   const examId = examPayload.exam_id;
   
-  // 1. Delete Exam row
+  // 1. Soft Delete Exam row
   const examSheet = getSheet('Exams');
   const examRows = examSheet.getDataRange().getValues();
   let examRowIndex = -1;
@@ -391,19 +391,31 @@ function deleteExam(examPayload) {
     }
   }
   if (examRowIndex !== -1) {
-    examSheet.deleteRow(examRowIndex);
+    const headers = examRows[0];
+    let delColIdx = headers.indexOf('is_deleted');
+    if (delColIdx === -1) {
+      delColIdx = headers.length;
+      examSheet.getRange(1, delColIdx + 1).setValue('is_deleted');
+    }
+    examSheet.getRange(examRowIndex, delColIdx + 1).setValue('TRUE');
   }
   
-  // 2. Delete associated questions
+  // 2. Soft Delete associated questions
   const qSheet = getSheet('Questions');
   const qRows = qSheet.getDataRange().getValues();
+  const qHeaders = qRows[0] || [];
+  let qDelColIdx = qHeaders.indexOf('is_deleted');
+  if (qDelColIdx === -1 && qRows.length > 0) {
+    qDelColIdx = qHeaders.length;
+    qSheet.getRange(1, qDelColIdx + 1).setValue('is_deleted');
+  }
   for (let i = qRows.length - 1; i >= 1; i--) {
     if (String(qRows[i][1]) === String(examId)) {
-      qSheet.deleteRow(i + 1);
+      qSheet.getRange(i + 1, qDelColIdx + 1).setValue('TRUE');
     }
   }
   
-  return { status: 'success', message: 'Exam and all its questions deleted successfully', exam_id: examId };
+  return { status: 'success', message: 'Exam and all its questions soft-deleted successfully', exam_id: examId };
 }
 
 function getGames() {
@@ -443,10 +455,17 @@ function deleteGame(payload) {
   const rows = sheet.getDataRange().getValues();
   const headers = rows[0];
   const idColIdx = headers.indexOf('game_id');
+  
+  let delColIdx = headers.indexOf('is_deleted');
+  if (delColIdx === -1) {
+    delColIdx = headers.length;
+    sheet.getRange(1, delColIdx + 1).setValue('is_deleted');
+  }
+  
   for (let i = rows.length - 1; i >= 1; i--) {
     if (String(rows[i][idColIdx]) === String(payload.game_id)) {
-      sheet.deleteRow(i + 1);
-      return { status: 'success', message: 'Game deleted', game_id: payload.game_id };
+      sheet.getRange(i + 1, delColIdx + 1).setValue('TRUE');
+      return { status: 'success', message: 'Game soft-deleted', game_id: payload.game_id };
     }
   }
   throw new Error(`Game '${payload.game_id}' not found.`);
@@ -477,18 +496,30 @@ function deleteSubmission(payload) {
     }
   }
   if (subRowIdx !== -1) {
-    subSheet.deleteRow(subRowIdx);
+    const headers = subRows[0];
+    let delColIdx = headers.indexOf('is_deleted');
+    if (delColIdx === -1) {
+      delColIdx = headers.length;
+      subSheet.getRange(1, delColIdx + 1).setValue('is_deleted');
+    }
+    subSheet.getRange(subRowIdx, delColIdx + 1).setValue('TRUE');
   }
 
   const detailsSheet = getSheet('SubmissionDetails');
   const detailsRows = detailsSheet.getDataRange().getValues();
+  const dHeaders = detailsRows[0] || [];
+  let dDelColIdx = dHeaders.indexOf('is_deleted');
+  if (dDelColIdx === -1 && detailsRows.length > 0) {
+    dDelColIdx = dHeaders.length;
+    detailsSheet.getRange(1, dDelColIdx + 1).setValue('is_deleted');
+  }
   for (let i = detailsRows.length - 1; i >= 1; i--) {
     if (String(detailsRows[i][0]) === String(submissionId)) {
-      detailsSheet.deleteRow(i + 1);
+      detailsSheet.getRange(i + 1, dDelColIdx + 1).setValue('TRUE');
     }
   }
 
-  return { status: 'success', message: 'Submission deleted successfully', submission_id: submissionId };
+  return { status: 'success', message: 'Submission soft-deleted successfully', submission_id: submissionId };
 }
 
 // --- Response Helpers ---
@@ -501,3 +532,7 @@ function createErrorResponse(message, statusCode = 500) {
   return ContentService.createTextOutput(JSON.stringify({ error: message, status: 'error' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
+
+
+

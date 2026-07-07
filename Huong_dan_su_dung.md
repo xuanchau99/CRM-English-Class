@@ -14,7 +14,7 @@ Chào mừng bạn đến với **EnglishTools** - nền tảng quản lý đề
 Tab **Quản lý Đề thi** là nơi bạn tạo và kết nối đề thi cho học sinh.
 
 ### Tạo / Cập nhật Đề thi
-1. Click **"➕ Create New Exam"**.
+1. Click **"+ Create New Exam"**.
 2. Nhập các thông tin: **Mã Đề (Exam ID)** (bắt buộc, không dấu hoặc khoảng trắng), **Tiêu đề**, **Thời lượng thi**, và gán **Trạng thái (Active/Inactive)**.
 3. Khi lưu thành công, đề thi sẽ hiện lên bảng.
 
