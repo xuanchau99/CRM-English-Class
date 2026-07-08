@@ -196,13 +196,16 @@ function importQuestions(questionsPayload) {
 
   for (let i = 0; i < questionsPayload.length; i++) {
     const question = questionsPayload[i];
+    if (String(question.type).trim().toLowerCase() === 'arrange_sentence') {
+      question.correct_answer = question.question_text;
+    }
     const rowNum = i + 2; // Excel row number
 
     // Validate required fields
     if (!question.question_id) throw new Error(`Row ${rowNum}: 'question_id' is missing.`);
     if (!question.exam_id) throw new Error(`Row ${rowNum} (ID: ${question.question_id}): 'exam_id' is missing.`);
     if (!question.type) throw new Error(`Row ${rowNum} (ID: ${question.question_id}): 'type' is missing.`);
-    const correctAnswerOptional = ['short_answer', 'matching'].includes(String(question.type).trim().toLowerCase());
+    const correctAnswerOptional = ['short_answer', 'matching', 'arrange_sentence'].includes(String(question.type).trim().toLowerCase());
     if (!correctAnswerOptional && (question.correct_answer === undefined || question.correct_answer === null || String(question.correct_answer).trim() === '')) {
       throw new Error(`Row ${rowNum} (ID: ${question.question_id}): 'correct_answer' is missing.`);
     }

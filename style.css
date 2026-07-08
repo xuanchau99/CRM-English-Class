@@ -3,6 +3,14 @@
 :root {
     /* Cotton Candy Pastel Palette */
     --primary: #8fa8ff;
+    --primary-dark: #4a5c75;
+    --primary-darker: #3a485a;
+    --primary-darkest: #2a384a;
+    --danger: #ff6b6b;
+    --danger-light: #ffe6e6;
+    --danger-dark: #ff4d4d;
+    --danger-darker: #ff3333;
+    --danger-darkest: #ff1a1a;
     /* Soft Peri Blue */
     --primary-light: #f4f6ff;
     --primary-hover: #7b96f5;
@@ -209,6 +217,28 @@ button.btn-secondary:hover {
 }
 
 button.btn-secondary:active {
+    transform: translateY(0) scale(0.98);
+}
+
+button.btn-danger {
+    background-color: var(--danger);
+    color: white;
+    padding: 0.85rem 1.75rem;
+    border: 2px solid transparent;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 1rem;
+    font-weight: 700;
+    transition: var(--transition);
+}
+
+button.btn-danger:hover {
+    background-color: var(--danger-hover);
+    color: white;
+}
+
+button.btn-danger:active {
     transform: translateY(0) scale(0.98);
 }
 
@@ -1977,4 +2007,149 @@ footer {
 .nav-circle.current {
     box-shadow: 0 0 0 3px rgba(107, 203, 119, 0.4);
     transform: scale(1.1);
+}
+
+/* ==================================================
+   BENTO TOAST & CONFIRM MODALS
+   ================================================== */
+.bento-toast-container {
+    position: fixed;
+    top: 2rem;
+    right: 2rem;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    pointer-events: none;
+}
+
+.bento-toast {
+    background: #3b82f6;
+    /* Prominent Blue */
+    color: #ffffff;
+    fill: #ffffff;
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius);
+    box-shadow: 0 10px 35px rgba(59, 130, 246, 0.4);
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    pointer-events: auto;
+    transform: translateX(120%);
+    opacity: 0;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s ease;
+    max-width: 350px;
+    font-weight: 600;
+}
+
+.bento-toast.bento-toast-show {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.bento-toast i {
+    font-size: 1.4rem;
+}
+
+.bento-toast-success {
+    background: #10b981;
+    /* Emerald Green */
+    box-shadow: 0 10px 35px rgba(16, 185, 129, 0.4);
+}
+
+.bento-toast-error {
+    background: var(--danger);
+    box-shadow: 0 10px 35px rgba(255, 107, 107, 0.4);
+}
+
+.bento-toast-info {
+    background: #3b82f6;
+}
+
+.bento-confirm-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 99998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.bento-confirm-modal.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.bento-confirm-content {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    padding: 2rem;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    transform: translateY(20px) scale(0.95);
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    border: 1px solid var(--border-color);
+}
+
+.bento-confirm-modal.active .bento-confirm-content {
+    transform: translateY(0) scale(1);
+}
+
+.bento-confirm-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.bento-confirm-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger);
+    font-size: 1.5rem;
+}
+
+.bento-confirm-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-main);
+    margin: 0;
+}
+
+.bento-confirm-body {
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+}
+
+.bento-confirm-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+}
+
+.actions-cell,
+.data-table th:first-child {
+    position: sticky;
+    left: 0;
+    background: #fff;
+    z-index: 2;
+    white-space: nowrap;
+    width: 90px;
 }

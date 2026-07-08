@@ -17,7 +17,91 @@ const getUTC7ISOString = () => {
     return utc7Date.toISOString().replace('Z', '+07:00');
 };
 
+
 document.addEventListener('DOMContentLoaded', () => {
+    // Inject Toast Container
+    let toastContainer = document.createElement('div');
+    toastContainer.className = 'bento-toast-container';
+    toastContainer.id = 'bento-toast-container';
+    document.body.appendChild(toastContainer);
+
+    // Inject Confirm Modal
+    let confirmModal = document.createElement('div');
+    confirmModal.className = 'bento-confirm-modal';
+    confirmModal.id = 'bento-confirm-modal';
+    confirmModal.innerHTML = `
+        <div class="bento-confirm-content">
+            <div class="bento-confirm-header">
+                <div class="bento-confirm-icon">&#9888;</div>
+                <h3 class="bento-confirm-title" id="bento-confirm-title">Confirm Action</h3>
+            </div>
+            <div class="bento-confirm-body" id="bento-confirm-body">Are you sure?</div>
+            <div class="bento-confirm-actions">
+                <button class="btn-secondary" id="bento-confirm-cancel">Cancel</button>
+                <button class="btn-danger" id="bento-confirm-ok">Yes, Proceed</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(confirmModal);
+
+    window.showToast = function(message, type = 'info') {
+        let tContainer = document.getElementById('bento-toast-container');
+        if(!tContainer) return;
+        const t = document.createElement('div');
+        t.className = `bento-toast bento-toast-${type}`;
+        let icon = '&#8505;';
+        if(type==='success') icon = '&#10003;';
+        if(type==='error') icon = '&#10007;';
+        t.innerHTML = `<i>${icon}</i> <span>${message}</span>`;
+        tContainer.appendChild(t);
+        
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            t.classList.add('bento-toast-show');
+        }));
+
+        const removeToast = () => {
+            t.classList.remove('bento-toast-show');
+            setTimeout(() => t.remove(), 400);
+        };
+        t.addEventListener('click', removeToast);
+        setTimeout(removeToast, 4000);
+    };
+
+    window.showConfirm = function(title, message, onConfirm) {
+        const modal = document.getElementById('bento-confirm-modal');
+        if(!modal) {
+            if(confirm(title + "\\n" + message)) if(onConfirm) onConfirm();
+            return;
+        }
+        document.getElementById('bento-confirm-title').innerText = title;
+        document.getElementById('bento-confirm-body').innerHTML = message;
+        
+        const okBtn = document.getElementById('bento-confirm-ok');
+        const cancelBtn = document.getElementById('bento-confirm-cancel');
+        
+        const cleanup = () => {
+            modal.classList.remove('active');
+            okBtn.replaceWith(okBtn.cloneNode(true));
+            cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+        };
+        
+        okBtn.addEventListener('click', () => { cleanup(); if(onConfirm) onConfirm(); });
+        cancelBtn.addEventListener('click', () => { cleanup(); });
+        
+        modal.classList.add('active');
+    };
+
+    // Override Alert
+    window.alert = function(msg) {
+        if(!msg) return;
+        let type = 'info';
+        let s = msg.toString().toLowerCase();
+        if(s.includes('thành công') || s.includes('success')) type = 'success';
+        if(s.includes('lỗi') || s.includes('error') || s.includes('thất bại') || s.includes('fail')) type = 'error';
+        if(window.showToast) window.showToast(msg, type);
+    };
+
+
     const appContainer = document.getElementById('app-container');
     
     // Global Overlay Loader Helpers
@@ -761,10 +845,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const logoutBtn = document.getElementById('logout-btn');
         if (logoutBtn) {
             logoutBtn.addEventListener('click', () => {
-                if (confirm('Are you sure you want to logout?')) {
+                window.showConfirm('Sign Out', 'Are you sure you want to logout?', () => {
                     sessionStorage.removeItem('teacher_session');
                     loadLoginScreen();
-                }
+                });
             });
         }
 
@@ -831,7 +915,7 @@ Tab **Quản lý Đề thi** là nơi bạn tạo và kết nối đề thi cho 
 
 ### Chia sẻ cho Học sinh (Copy Link)
 Tại mỗi đề thi ở bảng có trạng thái **Active**:
-- Hãy bấm nút **"🔗 Copy Link"** (Màu xanh dương đậm).
+- Hãy bấm nút **"🔗 Link"** (Màu xanh dương đậm).
 - Link được copy (VD: \`student.html?exam_id=ENG_123\`) vừa có thể dán vào Zalo/Facebook gửi cho học sinh.
 - Mẹo: Khi học sinh bấm link này, hệ thống sẽ **Tự động chọn sẵn đề thi** cho học sinh đó, loại bỏ rủi ro học sinh chọn nhầm đề của lớp khác.
 
@@ -1030,7 +1114,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         });
 
         resetBtn.addEventListener('click', () => {
-            if (confirm('Are you sure you want to clear all Local Storage database entries? This will delete all local mock data.')) {
+            window.showConfirm('Factory Reset', 'Are you sure you want to clear all Local Storage database entries? This will delete all local mock data.', () => {
                 localStorage.removeItem('mock_exams');
                 localStorage.removeItem('mock_questions');
                 localStorage.removeItem('mock_submissions');
@@ -1039,7 +1123,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 alert('Mock database reset to default questions.');
                 closeSettingsModal();
                 loadExamsList();
-            }
+            });
         });
     }
 
@@ -1096,11 +1180,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         <td style="font-size:0.85rem; color:var(--text-muted);">${formattedDate}</td>
                         <td>
                             <div style="display:flex; gap:0.25rem; flex-wrap:wrap;">
-                                <button class="edit-btn" onclick='showExamModal(${examStr})'>🖍</button>
-                                <button class="edit-btn" style="background-color:var(--primary); color:white;" onclick="manageExamQuestions('${exam.exam_id}')">Manage Questions</button>
-                                <button class="edit-btn" style="background-color:var(--secondary); color:white;" onclick="copyStudentLink('${exam.exam_id}')">🔗 Copy Link</button>
-                                <button class="edit-btn" style="background-color:#4b5563; color:white;" onclick="showPrintExamModal('${exam.exam_id}')">🖨️ Print</button>
-                                <button class="delete-btn" onclick="deleteExam('${exam.exam_id}')">Delete</button>
+                                <button class="edit-btn" title="Edit Exam" onclick='showExamModal(${examStr})'>🖍</button>
+                                <button class="edit-btn" title="Copy Link" style="background-color:var(--secondary); color:white;" onclick="copyStudentLink('${exam.exam_id}')">🔗 Link</button>
+                                <button class="edit-btn" title="Manage Questions" style="background-color:var(--primary); color:white;" onclick="manageExamQuestions('${exam.exam_id}')">Manage Questions</button>
+                                <button class="edit-btn" title="Print Exam" style="background-color:#002860; color:white;" onclick="showPrintExamModal('${exam.exam_id}')">🖨️ </button>
+                                <button class="delete-btn" title="Delete Exam" onclick="deleteExam('${exam.exam_id}')">🗑️</button>
                             </div>
                         </td>
                     </tr>
@@ -1156,7 +1240,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     };
 
     window.deleteExam = async function(examId) {
-        if (confirm(`⚠️ WARNING: Are you sure you want to delete exam "${examId}"?\nThis will delete the exam record AND all its associated questions permanently!`)) {
+        window.showConfirm('Delete Exam', `Are you sure you want to delete exam "${examId}"`, async () => {
             showLoader('Deleting exam and related questions...');
             try {
                 await db.deleteExam(examId);
@@ -1167,7 +1251,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             } finally {
                 hideLoader();
             }
-        }
+        });
     };
 
     // ─── GAME MANAGER ──────────────────────────────────────────
@@ -1291,9 +1375,10 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 `;
 
                 shuffledQ.forEach((q, index) => {
-                    const qText = decodeUtf8Mangle(String(q.question_text || ''));
+                                        const qText = decodeUtf8Mangle(String(q.question_text || ''));
                     htmlStr += `<div class="question">`;
-                    htmlStr += `<div class="question-text">Câu ${index + 1}: ${qText}</div>`;
+                    const displayQText = (q.type === 'arrange_sentence') ? 'Arrange the words to make a correct sentence:' : qText;
+                    htmlStr += `<div class="question-text">Câu ${index + 1}: ${displayQText}</div>`;
                     
                     const optA = decodeUtf8Mangle(q.option_a);
                     const optB = decodeUtf8Mangle(q.option_b);
@@ -1333,9 +1418,12 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                            htmlStr += `<div class="options" style="display:block; margin-top:5px;">(Học sinh nối/điền đáp án thích hợp)</div>`;
                         }
                     } else if (q.type === 'arrange_sentence') {
-                        htmlStr += `<div class="options" style="display:block; margin-top:5px;">Từ gợi ý: ${[optA, optB, optC, optD].filter(Boolean).join(' | ')}</div>`;
+                        const targetSentence = (q.question_text && q.question_text.length > 2) ? q.question_text : (q.correct_answer || '');
+                        const words = decodeUtf8Mangle(String(targetSentence)).trim().split(/\s+/).filter(w => w !== '');
+                        const shuffled = [...words].sort(() => Math.random() - 0.5);
+                        htmlStr += `<div class="options" style="display:block; margin-top:5px;">Từ gợi ý: <strong>${shuffled.join(' / ')}</strong></div>`;
                         if (withAnswers) {
-                            htmlStr += `<div class="options" style="font-style:italic; margin-top:2px;">Đáp án: <span class="correct-ans">${corAns}</span></div>`;
+                            htmlStr += `<div class="options" style="font-style:italic; margin-top:2px;">Đáp án: <span class="correct-ans">${decodeUtf8Mangle(String(targetSentence))}</span></div>`;
                         } else {
                             htmlStr += `<div class="options" style="display:block; margin-top:10px;">.............................................................................</div>`;
                         }
@@ -1392,7 +1480,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             if (games.length === 0) {
                 container.innerHTML = `
                     <div class="empty-questions-state">
-                        <span class="empty-icon">🎮</span>
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="empty-icon" style="color:var(--text-muted);"><line x1="6" y1="12" x2="10" y2="12"></line><line x1="8" y1="10" x2="8" y2="14"></line><line x1="15" y1="13" x2="15.01" y2="13"></line><line x1="18" y1="11" x2="18.01" y2="11"></line><rect x="2" y="6" width="20" height="12" rx="2"></rect></svg>
                         <p>No games yet.</p>
                         <button class="btn-primary" onclick="showGameModal(null)" style="margin-top:0.5rem;">+ New Game</button>
                     </div>`;
@@ -1427,13 +1515,14 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     };
 
     window.deleteGameEntry = async function(gameId) {
-        if (!confirm('⚠️ Are you sure you want to delete this game?')) return;
-        showLoader('Deleting game...');
-        try {
-            await db.deleteGame(gameId);
-            loadGamesList();
-        } catch (e) { alert('Error deleting: ' + e.message); }
-        finally { hideLoader(); }
+        window.showConfirm('Delete Game', 'Are you sure you want to delete this game?', async () => {
+            showLoader('Deleting game...');
+            try {
+                await db.deleteGame(gameId);
+                loadGamesList();
+            } catch (e) { alert('Error deleting: ' + e.message); }
+            finally { hideLoader(); }
+        });
     };
 
     window.showGameModal = function(game) {
@@ -1757,24 +1846,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
     function validateQuestionRow(row, rowIndex, existingQuestionIds, fileQuestionIds) {
         const errors = [];
-        const rowNum = rowIndex + 2; // Excel row is 1-indexed + header is row 1
-
-        if (!row.question_id) {
-            errors.push(`Row ${rowNum}: 'question_id' is missing.`);
-        } else {
-            const qid = String(row.question_id).trim();
-            if (fileQuestionIds.has(qid)) {
-                errors.push(`Row ${rowNum}: Duplicate question_id '${qid}' found within the uploaded file.`);
-            }
-            if (existingQuestionIds.has(qid)) {
-                errors.push(`Row ${rowNum}: Question ID '${qid}' already exists in this exam database.`);
-            }
-            fileQuestionIds.add(qid);
-        }
-
-        if (!row.exam_id) {
-            errors.push(`Row ${rowNum}: 'exam_id' is missing.`);
-        }
+        const rowNum = rowIndex + 2;
 
         const validTypes = ['multiple_choice', 'true_false', 'fill_blank', 'arrange_sentence', 'vocabulary', 'matching', 'short_answer'];
         if (!row.type) {
@@ -1784,7 +1856,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         }
 
         const qtype = row.type ? String(row.type).trim().toLowerCase() : '';
-        const correctAnswerOptional = ['short_answer', 'matching'].includes(qtype);
+        const correctAnswerOptional = ['short_answer', 'matching', 'arrange_sentence'].includes(qtype);
         if (!correctAnswerOptional && (row.correct_answer === undefined || row.correct_answer === null || String(row.correct_answer).trim() === '')) {
             errors.push(`Row ${rowNum}: 'correct_answer' is missing.`);
         }
@@ -1814,36 +1886,29 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     return;
                 }
                 
-                // Fetch existing questions to check duplicates
                 const examSelect = document.getElementById('qbm-exam-select');
                 const selectedExamId = examSelect ? examSelect.value : '';
                 
-                let existingQuestionIds = new Set();
-                if (selectedExamId) {
-                    try {
-                        const existing = await db.getQuestions(selectedExamId);
-                        existingQuestionIds = new Set(existing.map(q => String(q.question_id).trim()));
-                    } catch (e) {
-                        console.warn('Failed to load existing questions for duplicates check:', e);
-                    }
+                if (!selectedExamId) {
+                    window.alert('Vui lòng chọn Mã Đề (Exam ID) từ menu phía trên trước khi Import.');
+                    return;
                 }
                 
                 // Validate questions
                 const processedQuestions = [];
-                const fileQuestionIds = new Set();
                 let errorCount = 0;
                 
                 const tableRows = [];
                 json.forEach((rawRow, index) => {
                     const row = normalizeRowKeys(rawRow);
-                    const validationErrors = validateQuestionRow(row, index, existingQuestionIds, fileQuestionIds);
+                    const validationErrors = validateQuestionRow(row, index, new Set(), new Set());
                     
                     const isValid = validationErrors.length === 0;
                     if (!isValid) errorCount++;
                     
                     const processed = {
-                        question_id: row.question_id ? String(row.question_id).trim() : '',
-                        exam_id: row.exam_id ? String(row.exam_id).trim() : selectedExamId, 
+                        question_id: 'Q' + Date.now().toString().slice(-6) + Math.floor(Math.random() * 1000) + index,
+                        exam_id: selectedExamId, 
                         type: row.type ? String(row.type).trim().toLowerCase() : '',
                         level: row.level ? String(row.level).trim().toLowerCase() : 'medium',
                         question_text: row.question_text ? String(row.question_text).trim() : '',
@@ -1858,6 +1923,10 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         tags: row.tags ? String(row.tags).trim() : '',
                         active: row.active === undefined || row.active === 'TRUE' || row.active === true || row.active === 1 || row.active === '1'
                     };
+                    
+                    if (processed.type === 'arrange_sentence') {
+                        processed.correct_answer = processed.question_text;
+                    }
                     
                     processedQuestions.push(processed);
                     
@@ -2086,7 +2155,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             if (loadedQuestions.length === 0) {
                 container.innerHTML = `
                     <div class="empty-questions-state">
-                        <span class="empty-icon">📝</span>
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="empty-icon" style="color:var(--text-muted);"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
                         <p>No questions yet for this exam.</p>
                         <p style="font-size:0.9rem;">Add your first question!</p>
                         <button class="btn-primary" onclick="document.getElementById('manual-add-question-btn').click()" style="margin-top:0.5rem;">
@@ -2160,29 +2229,33 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             </div>`;
         }
 
-        const headers = ['question_id', 'type', 'level', 'question_text', 'correct_answer', 'points', 'Actions'];
+        const headers = ['Actions', 'question_id', 'type', 'level', 'question_text', 'correct_answer', 'points'];
 
         let table = bannerHtml + '<div class="table-responsive"><table class="data-table"><thead><tr>';
         headers.forEach(header => table += `<th>${header.replace(/_/g, ' ').toUpperCase()}</th>`);
         table += '</tr></thead><tbody>';
 
         questions.forEach(q => {
+            const qStr = JSON.stringify(q);
+
             table += `<tr data-question-id="${q.question_id}">`;
+
+            // Actions
+            table += `
+                <td class="actions-cell">
+                    <button class="edit-btn" title="Edit Question" onclick='showEditModal(${qStr})'>🖍</button>
+                    <button class="delete-btn" title="Delete Question" onclick="deleteQuestion('${q.question_id}', '${q.exam_id}')">🗑</button>
+                </td>
+            `;
+
             table += `<td>${q.question_id || ''}</td>`;
             table += `<td><span class="badge badge-primary">${q.type || ''}</span></td>`;
             table += `<td><span class="badge badge-secondary">${q.level || ''}</span></td>`;
             table += `<td class="question-text-cell" title="${q.question_text || ''}">${q.question_text || ''}</td>`;
             table += `<td class="question-text-cell" title="${q.correct_answer || ''}">${q.correct_answer || ''}</td>`;
             table += `<td>${q.points || '1'}</td>`;
-            
-            // Safe JSON serialization of the question object
-            const qStr = JSON.stringify(q);
-            table += `
-                <td>
-                    <button class="edit-btn" onclick='showEditModal(${qStr})'>Edit</button>
-                    <button class="delete-btn" onclick="deleteQuestion('${q.question_id}', '${q.exam_id}')">Delete</button>
-                </td>
-            `;
+
+            table += `</tr>`;
         });
 
         table += '</tbody></table></div>';
@@ -2236,13 +2309,13 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             showOptions: true, correctRequired: true
         },
         arrange_sentence: {
-            emoji: '🔀',
-            hint: 'Option A/B/C/D là các từ/cụm từ rời. Correct Answer là câu hoàn chỉnh sau khi sắp xếp.',
-            optionALabel: 'Cụm từ 1', optionBLabel: 'Cụm từ 2', optionCLabel: 'Cụm từ 3', optionDLabel: 'Cụm từ 4',
-            optionAPlaceholder:'VD: We', optionBPlaceholder:'VD: are', optionCPlaceholder:'VD: learning', optionDPlaceholder:'VD: English now .',
-            correctPlaceholder: 'VD: We are learning English now .',
-            acceptedPlaceholder: '["We are learning English now ."]',
-            showOptions: true, correctRequired: true
+            emoji: '📝',
+            hint: 'Nhập câu Tiếng Anh đúng hoàn chỉnh vào ô "Question Text". ĐÃ ẨN CÁC Ô ĐÁP ÁN BÊN DƯỚI. Ứng dụng sẽ xáo trộn câu này.',
+            optionALabel: '', optionBLabel: '', optionCLabel: '', optionDLabel: '',
+            optionAPlaceholder:'', optionBPlaceholder:'', optionCPlaceholder:'', optionDPlaceholder:'',
+            correctPlaceholder: '',
+            acceptedPlaceholder: '',
+            showOptions: false, correctRequired: false
         },
         matching: {
             emoji: '🔗',
@@ -2366,7 +2439,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     </div>
 
                     <!-- Section 3: Answer -->
-                    <div class="modal-section">
+                    <div class="modal-section" id="section-answer-wrapper">
                         <p class="modal-section-title">✅ Đáp án</p>
 
                         <!-- Answer toggle buttons (shown for types that have options) -->
@@ -2471,6 +2544,17 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             // Show/hide options
             const optFields = document.getElementById('edit-options-fields');
             optFields.style.display = cfg.showOptions ? 'grid' : 'none';
+            // Show/hide correct answer manual area
+            const ansArea = document.getElementById('answer-manual-area');
+            if (ansArea) {
+                ansArea.style.display = (type === 'arrange_sentence') ? 'none' : 'block';
+            }
+            
+            // Show/hide the ENTIRE Answer Section Wrapper if arrange_sentence
+            const sectionAnswerWrapper = document.getElementById('section-answer-wrapper');
+            if (sectionAnswerWrapper) {
+                sectionAnswerWrapper.style.display = (type === 'arrange_sentence') ? 'none' : 'block';
+            }
             // Update option labels and placeholders
             if (cfg.showOptions) {
                 ['a','b','c','d'].forEach(x => {
@@ -2620,6 +2704,10 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             fd.forEach((val, key) => { data[key] = val; });
             data.active = document.getElementById('edit-active').checked;
             data.points = parseFloat(data.points) || 1;
+            
+            if (data.type === 'arrange_sentence') {
+                data.correct_answer = data.question_text;
+            }
 
             showLoader('Đang lưu thông tin câu hỏi...');
             try {
@@ -2649,7 +2737,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     };
 
     window.deleteQuestion = async function(questionId, examId) {
-        if (confirm(`Are you sure you want to delete question "${questionId}"?`)) {
+        window.showConfirm('Delete Question', `Are you sure you want to delete question "${questionId}"?`, async () => {
             showLoader('Đang xóa câu hỏi...');
             try {
                 await db.deleteQuestion(questionId, examId);
@@ -2660,7 +2748,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             } finally {
                 hideLoader();
             }
-        }
+        });
     };
 
     /**
@@ -2807,7 +2895,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         clientQuestions.forEach((q, index) => {
             // Arrange Sentence state
             if (q.type === 'arrange_sentence') {
-                const originalWords = q.correct_answer.trim().split(/\s+/).filter(w => w !== '');
+                const targetSentence = (q.question_text && q.question_text.length > 2) ? q.question_text : (q.correct_answer || '');
+                const originalWords = targetSentence.trim().split(/\s+/).filter(w => w !== '');
                 const currentAnswer = window.currentExamState.answers[index];
                 if (currentAnswer) {
                     const arranged = currentAnswer.trim().split(/\s+/).filter(w => w !== '');
@@ -3150,7 +3239,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 <span class="badge badge-warning">${question.level}</span>
                 <span class="badge badge-accent">${question.points} Pt(s)</span>
             </div>
-            <p class="question-text">${question.question_text}</p>
+            <p class="question-text">${question.type === "arrange_sentence" ? "Arrange the words to make a correct sentence:" : question.question_text}</p>
             ${optionsHtml}
         `;
 
@@ -3968,8 +4057,6 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         if (!localStorage.getItem('mock_questions')) {
             const sampleQuestions = [
                 {
-                    question_id: 'Q101',
-                    exam_id: 'ENG_UNIT_1',
                     type: 'multiple_choice',
                     level: 'easy',
                     question_text: 'Choose the correct answer: She ___ apples.',
@@ -3985,8 +4072,6 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     active: true
                 },
                 {
-                    question_id: 'Q102',
-                    exam_id: 'ENG_UNIT_1',
                     type: 'true_false',
                     level: 'easy',
                     question_text: 'The auxiliary verb "does" is used for plural subjects (like "they", "we").',
@@ -4002,8 +4087,6 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     active: true
                 },
                 {
-                    question_id: 'Q103',
-                    exam_id: 'ENG_UNIT_1',
                     type: 'fill_blank',
                     level: 'medium',
                     question_text: 'Write the correct form: They usually ______ (walk) to school, but today they are going by bus.',
@@ -4019,8 +4102,6 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     active: true
                 },
                 {
-                    question_id: 'Q104',
-                    exam_id: 'ENG_UNIT_1',
                     type: 'arrange_sentence',
                     level: 'hard',
                     question_text: 'Arrange the words to make a correct question:',
@@ -4036,8 +4117,6 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     active: true
                 },
                 {
-                    question_id: 'Q105',
-                    exam_id: 'ENG_UNIT_1',
                     type: 'vocabulary',
                     level: 'easy',
                     question_text: 'What does "library" mean?',
@@ -4053,8 +4132,6 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     active: true
                 },
                 {
-                    question_id: 'Q201',
-                    exam_id: 'ENG_UNIT_2',
                     type: 'matching',
                     level: 'medium',
                     question_text: 'Match the English classroom words with their Vietnamese meanings:',
@@ -4070,8 +4147,6 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     active: true
                 },
                 {
-                    question_id: 'Q202',
-                    exam_id: 'ENG_UNIT_2',
                     type: 'short_answer',
                     level: 'hard',
                     question_text: 'Describe what you do during English lessons in 1-2 sentences.',
@@ -4257,18 +4332,18 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     };
 
     window.deleteSubmissionEntry = async function(submissionId, studentName, examId) {
-        if (!confirm(`⚠️ Are you sure you want to delete the results of "${studentName}" and allow this student to retake the test?\n\nThis action cannot be undone!`)) return;
-
-        showLoader('Deleting submission...');
-        try {
-            await db.deleteSubmission(submissionId);
-            alert(`✅ Deleted results of "${studentName}". This student can retake the test.`);
-            viewExamSubmissions(examId);
-        } catch (err) {
-            alert('Error deleting submission: ' + err.message);
-        } finally {
-            hideLoader();
-        }
+        window.showConfirm('Delete Submission', `Are you sure you want to delete the results of "${studentName}"`, async () => {
+            showLoader('Deleting submission...');
+            try {
+                await db.deleteSubmission(submissionId);
+                alert(`✅ Deleted results of "${studentName}". This student can retake the test.`);
+                viewExamSubmissions(examId);
+            } catch (err) {
+                alert('Error deleting submission: ' + err.message);
+            } finally {
+                hideLoader();
+            }
+        });
     };
 
     window.viewSubmissionDetailsModal = async function(submissionId, studentName, examTitle) {
@@ -4370,7 +4445,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     // ─────────────────────────────────────────────
     function exportSampleTemplate() {
         const headers = [
-            'question_id', 'exam_id', 'type', 'level',
+            'type', 'level',
             'question_text',
             'option_a', 'option_b', 'option_c', 'option_d',
             'correct_answer', 'accepted_answers',
@@ -4378,135 +4453,137 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         ];
 
         const sampleRows = [
-            // 1. multiple_choice
-            {
-                question_id: 'Q001',
-                exam_id: 'ENG_SAMPLE',
-                type: 'multiple_choice',
-                level: 'easy',
-                question_text: 'Choose the correct verb: She ___ to school every day.',
-                option_a: 'go',
-                option_b: 'goes',
-                option_c: 'went',
-                option_d: 'going',
-                correct_answer: 'goes',
-                accepted_answers: '["goes"]',
-                explanation: "In Present Simple, 'She' takes the verb ending in -es.",
-                points: 2,
-                tags: 'grammar;present-simple',
-                active: 'TRUE'
-            },
-            // 2. fill_blank
-            {
-                question_id: 'Q002',
-                exam_id: 'ENG_SAMPLE',
-                type: 'fill_blank',
-                level: 'easy',
-                question_text: 'Complete the sentence: My brother is ___ than me. (tall)',
-                option_a: '',
-                option_b: '',
-                option_c: '',
-                option_d: 'taller',
-                correct_answer: 'taller',
-                accepted_answers: '["taller"]',
-                explanation: "The comparative form of 'tall' is 'taller'.",
-                points: 2,
-                tags: 'grammar;comparatives',
-                active: 'TRUE'
-            },
-            // 3. true_false
-            {
-                question_id: 'Q003',
-                exam_id: 'ENG_SAMPLE',
-                type: 'true_false',
-                level: 'easy',
-                question_text: 'True or False: The sun rises in the west.',
-                option_a: '',
-                option_b: '',
-                option_c: '',
-                option_d: 'FALSE',
-                correct_answer: 'FALSE',
-                accepted_answers: '["False","false","FALSE"]',
-                explanation: 'The sun rises in the east.',
-                points: 1,
-                tags: 'general;true-false',
-                active: 'TRUE'
-            },
-            // 4. vocabulary
-            {
-                question_id: 'Q004',
-                exam_id: 'ENG_SAMPLE',
-                type: 'vocabulary',
-                level: 'easy',
-                question_text: "What is the meaning of the word 'teacher'?",
-                option_a: 'Student',
-                option_b: 'Doctor',
-                option_c: 'Person who teaches',
-                option_d: 'Engineer',
-                correct_answer: 'Person who teaches',
-                accepted_answers: '["Person who teaches"]',
-                explanation: 'A teacher is a person who teaches students.',
-                points: 2,
-                tags: 'vocabulary;people',
-                active: 'TRUE'
-            },
-            // 5. arrange_sentence
-            {
-                question_id: 'Q005',
-                exam_id: 'ENG_SAMPLE',
-                type: 'arrange_sentence',
-                level: 'medium',
-                question_text: 'Arrange the words to make a correct sentence:',
-                option_a: 'learning',
-                option_b: 'We',
-                option_c: 'are',
-                option_d: 'English now .',
-                correct_answer: 'We are learning English now .',
-                accepted_answers: '["We are learning English now ."]',
-                explanation: 'Present Continuous: Subject + be + V-ing + Object.',
-                points: 3,
-                tags: 'grammar;sentence-structure',
-                active: 'TRUE'
-            },
-            // 6. matching
-            {
-                question_id: 'Q006',
-                exam_id: 'ENG_SAMPLE',
-                type: 'matching',
-                level: 'medium',
-                question_text: 'Match the animals with their Vietnamese meanings:',
-                option_a: 'cat | mèo',
-                option_b: 'dog | chó',
-                option_c: 'bird | chim',
-                option_d: 'fish | cá',
-                correct_answer: '{"cat":"mèo","dog":"chó","bird":"chim","fish":"cá"}',
-                accepted_answers: '{"cat":"mèo","dog":"chó","bird":"chim","fish":"cá"}',
-                explanation: 'Match each English word with its Vietnamese meaning.',
-                points: 4,
-                tags: 'vocabulary;animals',
-                active: 'TRUE'
-            },
-            // 7. short_answer
-            {
-                question_id: 'Q007',
-                exam_id: 'ENG_SAMPLE',
-                type: 'short_answer',
-                level: 'hard',
-                question_text: 'Describe what you do during English lessons in 1-2 sentences.',
-                option_a: '',
-                option_b: '',
-                option_c: '',
-                option_d: '',
-                correct_answer: '',
-                accepted_answers: '',
-                explanation: 'This question will be graded by your teacher.',
-                points: 5,
-                tags: 'writing;open-ended',
-                active: 'TRUE'
-            }
-        ];
+        // 1. multiple_choice
+        {
+            type: 'multiple_choice',
+            level: 'medium',
+            question_text: 'Choose ALL correct verbs: She ___ to school.',
+            option_a: 'go',
+            option_b: 'goes',
+            option_c: 'went',
+            option_d: 'going',
+            correct_answer: 'goes, went',
+            accepted_answers: '["goes", "went"]',
+            explanation: "Could be present simple (goes) or past simple (went).",
+            points: 2,
+            tags: 'grammar',
+            active: 'TRUE'
+        },
+        // 2. single_choice
+        {
+            type: 'single_choice',
+            level: 'easy',
+            question_text: 'Choose ONE correct verb: She ___ to school every day.',
+            option_a: 'go',
+            option_b: 'goes',
+            option_c: 'went',
+            option_d: 'going',
+            correct_answer: 'goes',
+            accepted_answers: '["goes"]',
+            explanation: "In Present Simple, 'She' takes the verb ending in -es.",
+            points: 1,
+            tags: 'grammar;present-simple',
+            active: 'TRUE'
+        },
+        // 3. fill_blank
+        {
+            type: 'fill_blank',
+            level: 'easy',
+            question_text: 'Complete the sentence: My brother is ___ than me. (tall)',
+            option_a: '',
+            option_b: '',
+            option_c: '',
+            option_d: '',
+            correct_answer: 'taller',
+            accepted_answers: '["taller"]',
+            explanation: "Comparative form of 'tall' is 'taller'.",
+            points: 2,
+            tags: 'grammar;comparatives',
+            active: 'TRUE'
+        },
+        // 4. true_false
+        {
+            type: 'true_false',
+            level: 'easy',
+            question_text: 'True or False: The sun rises in the west.',
+            option_a: '',
+            option_b: '',
+            option_c: '',
+            option_d: '',
+            correct_answer: 'FALSE',
+            accepted_answers: '["False","false","FALSE"]',
+            explanation: 'The sun rises in the east.',
+            points: 1,
+            tags: 'general',
+            active: 'TRUE'
+        },
+        // 5. vocabulary
+        {
+            type: 'vocabulary',
+            level: 'easy',
+            question_text: "What is the meaning of the word 'teacher'?",
+            option_a: 'Student',
+            option_b: 'Doctor',
+            option_c: 'Person who teaches',
+            option_d: 'Engineer',
+            correct_answer: 'Person who teaches',
+            accepted_answers: '["Person who teaches"]',
+            explanation: 'A teacher is someone who teaches students.',
+            points: 2,
+            tags: 'vocabulary',
+            active: 'TRUE'
+        },
+        // 6. arrange_sentence
+        {
+            type: 'arrange_sentence',
+            level: 'medium',
+            question_text: 'We are learning English now .',
+            option_a: '',
+            option_b: '',
+            option_c: '',
+            option_d: '',
+            correct_answer: '',
+            accepted_answers: '',
+            explanation: 'Subject + be + V-ing + Object.',
+            points: 3,
+            tags: 'grammar',
+            active: 'TRUE'
+        },
+        // 7. matching
+        {
+            type: 'matching',
+            level: 'medium',
+            question_text: 'Match the animals with their Vietnamese meanings:',
+            option_a: 'cat | mèo',
+            option_b: 'dog | chó',
+            option_c: 'bird | chim',
+            option_d: 'fish | cá',
+            correct_answer: '{"cat":"mèo","dog":"chó","bird":"chim","fish":"cá"}',
+            accepted_answers: '{"cat":"mèo","dog":"chó","bird":"chim","fish":"cá"}',
+            explanation: 'Match each English word with its translation.',
+            points: 4,
+            tags: 'vocabulary',
+            active: 'TRUE'
+        },
+        // 8. short_answer
+        {
+            type: 'short_answer',
+            level: 'hard',
+            question_text: 'Describe what you do during English lessons in 1-2 sentences.',
+            option_a: '',
+            option_b: '',
+            option_c: '',
+            option_d: '',
+            correct_answer: '',
+            accepted_answers: '',
+            explanation: 'Graded manually by teacher.',
+            points: 5,
+            tags: 'writing',
+            active: 'TRUE'
+        }
+    ];
 
-        // ── Build worksheet data ──
+    // 🚀 Build worksheet data 🚀──
         const wsData = [headers];
         sampleRows.forEach(row => {
             wsData.push(headers.map(h => row[h] !== undefined ? row[h] : ''));
@@ -4514,32 +4591,25 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
         // ── Guide sheet data ──
         const guideData = [
-            ['📘 HƯỚNG DẪN SỬ DỤNG FILE MẪU IMPORT CÂU HỎI'],
-            [],
-            ['CỘT BẮT BUỘC:', ''],
-            ['question_id', 'Mã câu hỏi – duy nhất trong cùng exam_id  (VD: Q001)'],
-            ['exam_id',     'Mã đề thi – đề mới sẽ được TỰ ĐỘNG tạo khi import  (VD: ENG_UNIT_2)'],
-            ['type',        'Loại câu hỏi – xem bảng bên dưới'],
-            ['level',       'easy | medium | hard'],
-            ['question_text','Nội dung câu hỏi'],
-            ['active',      'TRUE hoặc FALSE'],
-            [],
-            ['CÁC LOẠI CÂU HỎI (type):', 'Mô tả'],
-            ['multiple_choice',   '4 đáp án A/B/C/D – correct_answer = text đáp án đúng'],
-            ['fill_blank',        'Điền từ vào chỗ trống – correct_answer = từ đúng'],
-            ['true_false',        'Đúng/Sai – correct_answer = TRUE hoặc FALSE'],
-            ['vocabulary',        'Chọn nghĩa đúng – giống multiple_choice'],
-            ['arrange_sentence',  'Sắp xếp câu – option_a..d là các cụm từ rời'],
-            ['matching',          'Nối cặp – correct_answer là JSON  {"cat":"mèo","dog":"chó"}'],
-            ['short_answer',      'Tự luận ngắn – correct_answer để trống, giáo viên chấm tay'],
-            [],
-            ['ACCEPTED_ANSWERS:', 'Định dạng'],
-            ['Dạng mảng JSON',  '["goes"]  hoặc  ["True","true","TRUE"]'],
-            ['Dạng object JSON cho matching', '{"cat":"mèo","dog":"chó"}'],
-            [],
-            ['⚠️  KHÔNG thay đổi tên cột header!'],
-            ['✅  Đề thi sẽ TỰ ĐỘNG được tạo theo exam_id khi import (duration 15 phút, active).'],
-        ];
+        ['Hướng dẫn sử dụng File Mẫu:'],
+        ['1. KHÔNG đổi tên các cột ở dòng số 1.'],
+        ['2. Import sẽ tự động nạp toàn bộ vào ID đề thi mà bạn đang chọn ở góc phải.'],
+        ['3. Cột type là CỰC KỲ QUAN TRỌNG, quyết định loại câu hỏi:'],
+        [],
+        ['TYPE', 'CÁCH NHẬP'],
+        ['single_choice',     'Điền 4 Lựa chọn A/B/C/D. Gõ Chính xác chữ của Lựa chọn đúng vào cột correct_answer'],
+        ['multiple_choice',   'Giống Single Choice nhưng cho phép chọn nhiều câu ở phía Học Sinh.'],
+        ['fill_blank',        'Điền từ vào chỗ trống -> correct_answer = từ đúng (thường Option A-D bỏ trống)'],
+        ['true_false',        'Đúng/Sai -> correct_answer = TRUE hoặc FALSE'],
+        ['vocabulary',        'Trắc nghiệm nghĩa -> giống single_choice'],
+        ['arrange_sentence',  'Sắp xếp câu -> CHỈ GHI ĐẦY ĐỦ CÂU ĐÚNG vào ô Question Text. Mọi ô đáp án & options để trống.'],
+        ['matching',          'Nối cặp chữ. Ghi các cặp vào Option A-D (Ví dụ: cat | mèo). Cột correct_answer ghi chuẩn JSON.'],
+        ['short_answer',      'Tự luận ngắn -> học sinh tự gõ. Giáo viên chấm tay. Bỏ trống các ô đáp án.'],
+        [],
+        ['ACCEPTED_ANSWERS (NÂNG CAO)', 'Định dạng bắt buộc: Mảng JSON nếu muốn hệ thống chấm nới lỏng'],
+        ['Ví dụ cho mảng',  '["goes", "went"]  hoặc  ["True","true","TRUE"]'],
+        ['Ví dụ JSON cho matching', '{"cat":"mèo","dog":"chó"}']
+    ];
 
         // ── Create workbook using XLSX.js ──
         const wb = XLSX.utils.book_new();
@@ -4579,6 +4649,37 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
     // Try to sync pending results automatically
     syncPendingSubmissions();
+
+    // GLOBAL ANTI-SPAM CLICK PROTECTION
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('button, input[type="submit"], input[type="button"], .btn-primary, .btn-danger, .btn-secondary, .edit-btn, .delete-btn');
+        if (btn) {
+            if (btn.dataset.spamLocked === 'true') {
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                return;
+            }
+            // Lock the button
+            btn.dataset.spamLocked = 'true';
+            
+            // Visual disable in the next tick to ensure current click executes fully
+            setTimeout(() => {
+                btn.style.pointerEvents = 'none';
+                btn.dataset.originalOpacity = btn.style.opacity || '';
+                btn.style.opacity = '0.6';
+                btn.style.cursor = 'wait';
+            }, 10);
+            
+            // Unlock after 1.5 seconds minimum (adjusting for async finishes)
+            setTimeout(() => {
+                btn.dataset.spamLocked = 'false';
+                btn.style.pointerEvents = 'auto';
+                btn.style.opacity = btn.dataset.originalOpacity || '';
+                btn.style.cursor = '';
+            }, 1500);
+        }
+    }, true);
 
     // Expose utilities for automated testing
     window.EnglishExamUtils = {

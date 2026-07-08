@@ -20,7 +20,7 @@ Tab **Quản lý Đề thi** là nơi bạn tạo và kết nối đề thi cho 
 
 ### Chia sẻ cho Học sinh (Copy Link)
 Tại mỗi đề thi ở bảng có trạng thái **Active**:
-- Hãy bấm nút **"🔗 Copy Link"** (Màu xanh dương đậm).
+- Hãy bấm nút **"🔗 Link"** (Màu xanh dương đậm).
 - Link được copy (VD: `student.html?exam_id=ENG_123`) vừa có thể dán vào Zalo/Facebook gửi cho học sinh.
 - Mẹo: Khi học sinh bấm link này, hệ thống sẽ **Tự động chọn sẵn đề thi** cho học sinh đó, loại bỏ rủi ro học sinh chọn nhầm đề của lớp khác.
 
