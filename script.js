@@ -3192,7 +3192,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         questions.forEach((q, index) => {
             const student_answer = answers[index];
             const correct_answer = q.correct_answer;
-            const points = q.points || 1;
+            const points = 1; // Force 1 point per question to evenly divide the 10-point scale
             total_points += points;
 
             let is_correct = false;
@@ -4327,6 +4327,10 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         gradeExam
     };
 });
+
+
+
+
 
 
 
