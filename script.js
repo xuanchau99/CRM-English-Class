@@ -1099,6 +1099,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                                 <button class="edit-btn" onclick='showExamModal(${examStr})'>🖍</button>
                                 <button class="edit-btn" style="background-color:var(--primary); color:white;" onclick="manageExamQuestions('${exam.exam_id}')">Manage Questions</button>
                                 <button class="edit-btn" style="background-color:var(--secondary); color:white;" onclick="copyStudentLink('${exam.exam_id}')">🔗 Copy Link</button>
+                                <button class="edit-btn" style="background-color:#4b5563; color:white;" onclick="showPrintExamModal('${exam.exam_id}')">🖨️ Print</button>
                                 <button class="delete-btn" onclick="deleteExam('${exam.exam_id}')">Delete</button>
                             </div>
                         </td>
@@ -1170,6 +1171,212 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     };
 
     // ─── GAME MANAGER ──────────────────────────────────────────
+    window.showPrintExamModal = function(examId) {
+        // Remove existing if any
+        if (document.getElementById('print-exam-modal')) document.getElementById('print-exam-modal').remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'print-exam-modal';
+        modal.className = 'modal'; 
+        modal.style.zIndex = '99999'; // ensure it's not hidden
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width:450px;">
+                <div class="modal-header">
+                    <h2>🖨️ Print Exam: ${examId}</h2>
+                    <button class="modal-close" onclick="document.getElementById('print-exam-modal').remove()">&times;</button>
+                </div>
+                <div class="modal-body" style="text-align:center;">
+                    <p style="margin-bottom: 1rem; color: var(--text-muted); font-size: 0.95rem;">
+                        Tùy chỉnh in ấn và xáo trộn câu hỏi cho mã đề <strong>${examId}</strong>.
+                    </p>
+                    <div style="display:flex; gap:10px; margin-bottom: 1.5rem; text-align: left;">
+                        <div style="flex:1;">
+                            <label style="font-weight:bold; display:block; margin-bottom: 0.5rem; color:var(--text-main); font-size:0.9rem;">Số lượng mã đề in:</label>
+                            <input type="number" id="print-copies-qty" value="1" min="1" max="20" style="width: 100%; padding: 0.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-sm); font-size: 1rem; font-family: var(--font);">
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-weight:bold; display:block; margin-bottom: 0.5rem; color:var(--text-main); font-size:0.9rem;">Cỡ chữ (pt):</label>
+                            <input type="number" id="print-font-size" value="11" min="8" max="18" step="0.5" style="width: 100%; padding: 0.5rem; border: 2px solid var(--border-color); border-radius: var(--radius-sm); font-size: 1rem; font-family: var(--font);">
+                        </div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:10px;">
+                        <button class="btn-primary" onclick="executePrintExam('${examId}', false)">🖨️ In cho Học Sinh (Tách mã đề, Không đáp án)</button>
+                        <button class="btn-secondary" onclick="executePrintExam('${examId}', true)" style="background:#b45309; color:white;">🖨️ In cho Giáo Viên (Có Khoanh Đáp Án)</button>
+                        <button class="btn-secondary" onclick="document.getElementById('print-exam-modal').remove()">Hủy</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    };
+
+    window.executePrintExam = async function(examId, withAnswers) {
+        const qtyInput = document.getElementById('print-copies-qty');
+        const numCopies = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
+
+        const fontInput = document.getElementById('print-font-size');
+        const fontSize = fontInput ? parseFloat(fontInput.value) || 11 : 11;
+
+        const modal = document.getElementById('print-exam-modal');
+        if (modal) modal.remove();
+
+        showLoader('Đang tạo bản in. Vui lòng chờ...');
+        try {
+            const allQuestions = await db.getQuestions(examId);
+            const activeQ = allQuestions.filter(q => q.active === 'TRUE' || q.active === true || String(q.active) === '1');
+
+            if (activeQ.length === 0) {
+                alert('Không có câu hỏi nào trong đề thi này để in.');
+                return;
+            }
+
+            let htmlStr = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Print Exam - ${examId}</title>
+                <style>
+                    body { font-family: 'Times New Roman', Times, serif; font-size: ${fontSize}pt; line-height: 1.35; color: #000; background: #fff; margin: 0; padding: 0; }
+                    .print-container { max-width: 210mm; margin: 0 auto; padding: 15mm; }
+                    .header { text-align: center; margin-bottom: 15px; }
+                    .header h2, .header h3 { margin: 4px 0; font-weight: bold; }
+                    .student-info { margin-bottom: 20px; font-weight: bold; }
+                    .student-info table { width: 100%; border-collapse: collapse; }
+                    .student-info td { padding: 6px 0; }
+                    .page-break { page-break-before: always; }
+                    .question { margin-bottom: 12px; page-break-inside: avoid; }
+                    .question-text { font-weight: bold; margin-bottom: 5px; }
+                    .options { margin-left: 15px; display: flex; flex-wrap: wrap; gap: 5px; }
+                    .option-line { flex: 1 1 23%; min-width: 140px; }
+                    .correct-ans { font-weight: bold; text-decoration: underline; }
+                    .mark-correct { font-weight: bold; font-size: 1.05em; color: black; }
+                    @media print {
+                        body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+                        .print-container { padding: 0; margin: 0; width: 100%; max-width: 100%; }
+                        .header { margin-top: 5mm; }
+                    }
+                </style>
+            </head>
+            <body>
+            <div class="print-container">
+            `;
+
+            for (let c = 1; c <= numCopies; c++) {
+                if (c > 1) {
+                    htmlStr += `<div class="page-break"></div>`;
+                }
+
+                // Shuffle questions for this copy
+                const shuffledQ = shuffleArray([...activeQ]);
+
+                htmlStr += `
+                <div class="header">
+                    <h2 style="text-transform: uppercase;">BÀI KIỂM TRA TIẾNG ANH</h2>
+                    <h3>Mã đề: ${examId} - Đề số 0${c} ${withAnswers ? '<span style="font-style:italic;">(Bản có Đáp án)</span>' : ''}</h3>
+                </div>
+                <div class="student-info">
+                    <table>
+                        <tr>
+                            <td style="width: 50%;">Họ và tên: ..............................................................</td>
+                            <td style="width: 25%;">Lớp: .........................</td>
+                            <td style="width: 25%;">Điểm: ........./10</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3" style="padding-top:10px;">Lời phê của giáo viên: ....................................................................................................</td>
+                        </tr>
+                    </table>
+                </div>
+                <hr style="border: 0; border-bottom: 1.5px solid #000; margin-bottom: 15px;">
+                <div class="questions-list">
+                `;
+
+                shuffledQ.forEach((q, index) => {
+                    const qText = decodeUtf8Mangle(String(q.question_text || ''));
+                    htmlStr += `<div class="question">`;
+                    htmlStr += `<div class="question-text">Câu ${index + 1}: ${qText}</div>`;
+                    
+                    const optA = decodeUtf8Mangle(q.option_a);
+                    const optB = decodeUtf8Mangle(q.option_b);
+                    const optC = decodeUtf8Mangle(q.option_c);
+                    const optD = decodeUtf8Mangle(q.option_d);
+                    const corAns = decodeUtf8Mangle(q.correct_answer);
+
+                    const renderOption = (letter, optText) => {
+                        if (!optText) return '';
+                        let isCorrect = withAnswers && String(optText).trim() === String(corAns).trim();
+                        let prefix = isCorrect ? `<span class="mark-correct">[✓] ${letter}.</span>` : `${letter}.`;
+                        return `<div class="option-line ${isCorrect ? 'correct-ans' : ''}">${prefix} ${optText}</div>`;
+                    };
+
+                    if (q.type === 'multiple_choice' || q.type === 'single_choice' || q.type === 'vocabulary') {
+                        htmlStr += `<div class="options">`;
+                        htmlStr += renderOption('A', optA);
+                        htmlStr += renderOption('B', optB);
+                        htmlStr += renderOption('C', optC);
+                        htmlStr += renderOption('D', optD);
+                        htmlStr += `</div>`;
+                    } else if (q.type === 'true_false') {
+                        htmlStr += `<div class="options">`;
+                        htmlStr += renderOption('A', 'TRUE');
+                        htmlStr += renderOption('B', 'FALSE');
+                        htmlStr += `</div>`;
+                    } else if (q.type === 'fill_blank' || q.type === 'short_answer') {
+                        if (withAnswers) {
+                            htmlStr += `<div class="options" style="font-style:italic;">Đáp án: <span class="correct-ans">${corAns || q.accepted_answers}</span></div>`;
+                        } else {
+                            htmlStr += `<div class="options" style="display:block; margin-top:10px;">.............................................................................</div>`;
+                        }
+                    } else if (q.type === 'matching') {
+                        if (withAnswers) {
+                           htmlStr += `<div class="options" style="font-style:italic;">Đáp án nối: <span class="correct-ans">${corAns}</span></div>`;
+                        } else {
+                           htmlStr += `<div class="options" style="display:block; margin-top:5px;">(Học sinh nối/điền đáp án thích hợp)</div>`;
+                        }
+                    } else if (q.type === 'arrange_sentence') {
+                        htmlStr += `<div class="options" style="display:block; margin-top:5px;">Từ gợi ý: ${[optA, optB, optC, optD].filter(Boolean).join(' | ')}</div>`;
+                        if (withAnswers) {
+                            htmlStr += `<div class="options" style="font-style:italic; margin-top:2px;">Đáp án: <span class="correct-ans">${corAns}</span></div>`;
+                        } else {
+                            htmlStr += `<div class="options" style="display:block; margin-top:10px;">.............................................................................</div>`;
+                        }
+                    }
+                    
+                    htmlStr += `</div>`;
+                });
+
+                htmlStr += `</div>`; // closes questions-list
+            }
+
+            htmlStr += `
+            </div>
+            <script>
+                window.onload = function() {
+                    setTimeout(() => {
+                        window.print();
+                    }, 500);
+                }
+            </script>
+            </body>
+            </html>
+            `;
+
+            const printWindow = window.open('', '_blank');
+            if (printWindow) {
+                printWindow.document.open();
+                printWindow.document.write(htmlStr);
+                printWindow.document.close();
+            } else {
+                alert('Trình duyệt đã chặn Pop-up (Bảng In). Vui lòng cấp quyền cho trang web để tiếp tục in bài kiểm tra!');
+            }
+
+        } catch (e) {
+            console.error(e);
+            alert('Lỗi tạo tập tin in ảo: ' + e.message);
+        } finally {
+            hideLoader();
+        }
+    };
+
     async function loadGamesList() {
         const container = document.getElementById('games-grid-container');
         if (!container) return;
@@ -2734,6 +2941,15 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     </div>
                     <div id="timer">${durationMinutes}:00</div>
                 </div>
+                <div id="question-navigator-container" style="margin-bottom: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-muted);">Question Navigator</h4>
+                        <button id="submit-now-btn" class="btn-primary" style="padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: 50px;">Submit Now</button>
+                    </div>
+                    <div id="question-navigator" class="question-navigator">
+                        ${questions.map((_, i) => `<div class="nav-circle" onclick="jumpToQuestion(${i})">${i + 1}</div>`).join('')}
+                    </div>
+                </div>
                 <div id="question-container"></div>
                 <div class="exam-navigation">
                     <button id="prev-btn">Previous</button>
@@ -2746,6 +2962,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         document.getElementById('prev-btn').addEventListener('click', prevQuestion);
         document.getElementById('next-btn').addEventListener('click', nextQuestion);
         document.getElementById('submit-btn').addEventListener('click', () => submitExam(false));
+        document.getElementById('submit-now-btn').addEventListener('click', () => submitExam(false));
         
         renderCurrentQuestion();
         startTimer(durationMinutes, window.currentExamState.remainingSeconds);
@@ -2804,6 +3021,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         const question = questions[currentQuestionIndex];
         const container = document.getElementById('question-container');
         const studentAnswer = answers[currentQuestionIndex];
+
+        window.updateNavigatorStatus();
 
         let optionsHtml = '';
 
@@ -2971,6 +3190,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         const { currentQuestionIndex } = window.currentExamState;
         window.currentExamState.answers[currentQuestionIndex] = val;
         saveDraft();
+        window.updateNavigatorStatus();
     };
 
     // Handles word pool clicking (Arrange Sentence)
@@ -3017,6 +3237,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
         state.answers[state.currentQuestionIndex] = JSON.stringify(matchedObj);
         saveDraft();
+        window.updateNavigatorStatus();
     };
     
     function nextQuestion() {
@@ -3039,6 +3260,45 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         document.getElementById('next-btn').style.display = currentQuestionIndex === questions.length - 1 ? 'none' : 'inline-block';
         document.getElementById('submit-btn').style.display = currentQuestionIndex === questions.length - 1 ? 'inline-block' : 'none';
     }
+    
+    window.updateNavigatorStatus = function() {
+        if (!window.currentExamState) return;
+        const { questions, currentQuestionIndex, answers } = window.currentExamState;
+        const navCircles = document.querySelectorAll('.nav-circle');
+        if (!navCircles.length) return;
+        navCircles.forEach((circle, index) => {
+            circle.classList.remove('current');
+            if (index === currentQuestionIndex) circle.classList.add('current');
+            
+            const ans = answers[index];
+            let isAnswered = false;
+            if (ans !== null && ans !== undefined && ans !== '') {
+                if (typeof ans === 'string' && ans.trim() !== '') {
+                    if (questions[index].type === 'matching') {
+                        try {
+                            const parsed = JSON.parse(ans);
+                            if (Object.keys(parsed).length > 0) isAnswered = true;
+                        } catch(e) {}
+                    } else {
+                        isAnswered = true;
+                    }
+                } else if (typeof ans === 'object') {
+                    if (Object.keys(ans).length > 0) isAnswered = true;
+                } else if (Array.isArray(ans) && ans.length > 0) {
+                    isAnswered = true;
+                }
+            }
+            if (isAnswered) circle.classList.add('answered');
+            else circle.classList.remove('answered');
+        });
+    };
+
+    window.jumpToQuestion = function(index) {
+        if (index >= 0 && index < window.currentExamState.questions.length) {
+            window.currentExamState.currentQuestionIndex = index;
+            renderCurrentQuestion();
+        }
+    };
 
     function submitExam(isAutoSubmit = false) {
         if (isAutoSubmit) {

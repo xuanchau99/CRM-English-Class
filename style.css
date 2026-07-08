@@ -357,7 +357,7 @@ form button {
 .exam-header #timer {
     font-size: 1.4rem;
     font-weight: 800;
-    color: var(--accent);
+    color: #ff0000;
     background-color: white;
     padding: 0.5rem 1rem;
     border-radius: var(--radius-sm);
@@ -1941,4 +1941,40 @@ footer {
     .admin-tab-btn {
         flex: 1 1 100%;
     }
+}
+
+/* Question Navigator */
+.question-navigator {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.nav-circle {
+    width: 35px;
+    height: 35px;
+    border-radius: 50px;
+    background-color: var(--border-color);
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.nav-circle:hover {
+    filter: brightness(0.9);
+}
+
+.nav-circle.answered {
+    background-color: #099300;
+    color: white;
+}
+
+.nav-circle.current {
+    box-shadow: 0 0 0 3px rgba(107, 203, 119, 0.4);
+    transform: scale(1.1);
 }
