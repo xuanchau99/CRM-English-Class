@@ -339,8 +339,14 @@ function deleteQuestion(qPayload) {
     throw new Error(`Question with ID '${qPayload.question_id}' and Exam ID '${qPayload.exam_id}' not found.`);
   }
   
-  sheet.deleteRow(rowIndex);
-  return { status: 'success', message: 'Question deleted successfully', question_id: qPayload.question_id };
+  const headers = rows[0] || [];
+  let delColIdx = headers.indexOf('is_deleted');
+  if (delColIdx === -1 && rows.length > 0) {
+    delColIdx = headers.length;
+    sheet.getRange(1, delColIdx + 1).setValue('is_deleted');
+  }
+  sheet.getRange(rowIndex, delColIdx + 1).setValue('TRUE');
+  return { status: 'success', message: 'Question soft-deleted successfully', question_id: qPayload.question_id };
 }
 
 function editExam(examPayload) {

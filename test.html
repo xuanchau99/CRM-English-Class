@@ -278,6 +278,16 @@
                 const errsA = valRow(validRow, 0, new Set(), new Set());
                 assertEqual(errsA.length, 0, 'validateQuestionRow: Valid MCQ row returns 0 errors');
 
+                // Case A2: Valid Single Choice row
+                const validSingleChoiceRow = {
+                    question_id: 'Q501',
+                    exam_id: 'ENG_T1',
+                    type: 'single_choice',
+                    correct_answer: 'A'
+                };
+                const errsA2 = valRow(validSingleChoiceRow, 0, new Set(), new Set());
+                assertEqual(errsA2.length, 0, 'validateQuestionRow: Valid Single Choice row returns 0 errors');
+
                 // Case B: Missing correct_answer
                 const missingAnsRow = {
                     question_id: 'Q502',

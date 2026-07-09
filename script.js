@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.showConfirm = function(title, message, onConfirm) {
         const modal = document.getElementById('bento-confirm-modal');
         if(!modal) {
-            if(confirm(title + "\\n" + message)) if(onConfirm) onConfirm();
+            if(confirm(title + "\n" + message)) if(onConfirm) onConfirm();
             return;
         }
         document.getElementById('bento-confirm-title').innerText = title;
@@ -81,6 +81,17 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const cleanup = () => {
             modal.classList.remove('active');
+            
+            // Clean up lock state and styles defensively before cloning
+            okBtn.dataset.spamLocked = 'false';
+            cancelBtn.dataset.spamLocked = 'false';
+            okBtn.style.pointerEvents = '';
+            okBtn.style.opacity = '';
+            okBtn.style.cursor = '';
+            cancelBtn.style.pointerEvents = '';
+            cancelBtn.style.opacity = '';
+            cancelBtn.style.cursor = '';
+
             okBtn.replaceWith(okBtn.cloneNode(true));
             cancelBtn.replaceWith(cancelBtn.cloneNode(true));
         };
@@ -144,7 +155,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (useMock) {
                 const exams = JSON.parse(localStorage.getItem('mock_exams') || '[]');
                 const activeExams = exams.filter(e => e.active === true || e.active === 'TRUE');
-                return teacherId ? activeExams.filter(e => !e.teacher_id || String(e.teacher_id) === teacherId) : activeExams;
+                const filtered = activeExams.filter(e => e.is_deleted !== true && e.is_deleted !== 'TRUE' && e.is_deleted !== 1 && e.is_deleted !== '1');
+                return teacherId ? filtered.filter(e => !e.teacher_id || String(e.teacher_id) === teacherId) : filtered;
             }
             try {
                 const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
@@ -153,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const result = await response.json();
                 if (result.status === 'success') {
                     localStorage.setItem('mock_exams', JSON.stringify(result.data));
-                    return result.data;
+                    return result.data.filter(e => e.is_deleted !== true && e.is_deleted !== 'TRUE' && e.is_deleted !== 1 && e.is_deleted !== '1');
                 }
                 throw new Error(result.error || 'Failed to load exams.');
             } catch (error) {
@@ -162,7 +174,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateDbStatusIndicator();
                 const exams = JSON.parse(localStorage.getItem('mock_exams') || '[]');
                 const activeExams = exams.filter(e => e.active === true || e.active === 'TRUE');
-                return teacherId ? activeExams.filter(e => !e.teacher_id || String(e.teacher_id) === teacherId) : activeExams;
+                const filtered = activeExams.filter(e => e.is_deleted !== true && e.is_deleted !== 'TRUE' && e.is_deleted !== 1 && e.is_deleted !== '1');
+                return teacherId ? filtered.filter(e => !e.teacher_id || String(e.teacher_id) === teacherId) : filtered;
             }
         },
 
@@ -199,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const useMock = localStorage.getItem('use_mock_db') === 'true';
             if (useMock) {
                 const allQs = JSON.parse(localStorage.getItem('mock_questions') || '[]');
-                return allQs.filter(q => String(q.exam_id) === String(examId));
+                return allQs.filter(q => String(q.exam_id) === String(examId) && q.is_deleted !== true && q.is_deleted !== 'TRUE' && q.is_deleted !== 1 && q.is_deleted !== '1');
             }
             try {
                 const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
@@ -211,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const filteredQs = allQs.filter(q => String(q.exam_id) !== String(examId));
                     const newCache = filteredQs.concat(result.data);
                     localStorage.setItem('mock_questions', JSON.stringify(newCache));
-                    return result.data;
+                    return result.data.filter(q => q.is_deleted !== true && q.is_deleted !== 'TRUE' && q.is_deleted !== 1 && q.is_deleted !== '1');
                 }
                 throw new Error(result.error || 'Failed to load questions.');
             } catch (error) {
@@ -219,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem('use_mock_db', 'true');
                 updateDbStatusIndicator();
                 const allQs = JSON.parse(localStorage.getItem('mock_questions') || '[]');
-                return allQs.filter(q => String(q.exam_id) === String(examId));
+                return allQs.filter(q => String(q.exam_id) === String(examId) && q.is_deleted !== true && q.is_deleted !== 'TRUE' && q.is_deleted !== 1 && q.is_deleted !== '1');
             }
         },
 
@@ -327,8 +340,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const useMock = localStorage.getItem('use_mock_db') === 'true';
             if (useMock) {
                 const existing = JSON.parse(localStorage.getItem('mock_questions') || '[]');
-                const filtered = existing.filter(q => !(q.question_id === questionId && q.exam_id === examId));
-                localStorage.setItem('mock_questions', JSON.stringify(filtered));
+                const idx = existing.findIndex(q => q.question_id === questionId && q.exam_id === examId);
+                if (idx !== -1) {
+                    existing[idx].is_deleted = true;
+                    localStorage.setItem('mock_questions', JSON.stringify(existing));
+                }
                 return { status: 'success', message: 'Deleted question locally.' };
             }
             try {
@@ -380,15 +396,18 @@ document.addEventListener('DOMContentLoaded', () => {
         async deleteExam(examId) {
             const useMock = localStorage.getItem('use_mock_db') === 'true';
             if (useMock) {
-                // Delete exam
+                // Soft delete exam
                 const exams = JSON.parse(localStorage.getItem('mock_exams') || '[]');
-                const filteredExams = exams.filter(e => e.exam_id !== examId);
-                localStorage.setItem('mock_exams', JSON.stringify(filteredExams));
+                const idx = exams.findIndex(e => e.exam_id === examId);
+                if (idx !== -1) exams[idx].is_deleted = true;
+                localStorage.setItem('mock_exams', JSON.stringify(exams));
                 
-                // Delete questions
+                // Soft delete questions
                 const questions = JSON.parse(localStorage.getItem('mock_questions') || '[]');
-                const filteredQs = questions.filter(q => q.exam_id !== examId);
-                localStorage.setItem('mock_questions', JSON.stringify(filteredQs));
+                questions.forEach(q => {
+                    if (q.exam_id === examId) q.is_deleted = true;
+                });
+                localStorage.setItem('mock_questions', JSON.stringify(questions));
                 
                 return { status: 'success', message: 'Exam and questions deleted locally' };
             }
@@ -443,17 +462,19 @@ document.addEventListener('DOMContentLoaded', () => {
         async getSubmissions() {
             const useMock = localStorage.getItem('use_mock_db') === 'true';
             if (useMock) {
-                return JSON.parse(localStorage.getItem('mock_submissions') || '[]');
+                const subs = JSON.parse(localStorage.getItem('mock_submissions') || '[]');
+                return subs.filter(s => s.is_deleted !== true && s.is_deleted !== 'TRUE' && s.is_deleted !== 1 && s.is_deleted !== '1');
             }
             try {
                 const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
                 const response = await fetch(endpoint + '?action=getSubmissions');
                 const result = await response.json();
-                if (result.status === 'success') return result.data;
+                if (result.status === 'success') return result.data.filter(s => s.is_deleted !== true && s.is_deleted !== 'TRUE' && s.is_deleted !== 1 && s.is_deleted !== '1');
                 throw new Error(result.error || 'Failed to fetch submissions.');
             } catch (error) {
                 console.warn('API fetch submissions failed, using local storage:', error);
-                return JSON.parse(localStorage.getItem('mock_submissions') || '[]');
+                const subs = JSON.parse(localStorage.getItem('mock_submissions') || '[]');
+                return subs.filter(s => s.is_deleted !== true && s.is_deleted !== 'TRUE' && s.is_deleted !== 1 && s.is_deleted !== '1');
             }
         },
 
@@ -480,12 +501,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const useMock = localStorage.getItem('use_mock_db') === 'true';
             if (useMock) {
                 const subs = JSON.parse(localStorage.getItem('mock_submissions') || '[]');
-                const filteredSubs = subs.filter(s => String(s.submission_id) !== String(submissionId));
-                localStorage.setItem('mock_submissions', JSON.stringify(filteredSubs));
+                const idx = subs.findIndex(s => String(s.submission_id) === String(submissionId));
+                if (idx !== -1) subs[idx].is_deleted = true;
+                localStorage.setItem('mock_submissions', JSON.stringify(subs));
 
                 const details = JSON.parse(localStorage.getItem('mock_submission_details') || '[]');
-                const filteredDetails = details.filter(d => String(d.submission_id) !== String(submissionId));
-                localStorage.setItem('mock_submission_details', JSON.stringify(filteredDetails));
+                details.forEach(d => {
+                    if (String(d.submission_id) === String(submissionId)) d.is_deleted = true;
+                });
+                localStorage.setItem('mock_submission_details', JSON.stringify(details));
 
                 return { status: 'success', message: 'Deleted submission locally.' };
             }
@@ -510,17 +534,19 @@ document.addEventListener('DOMContentLoaded', () => {
         async getGames() {
             const useMock = localStorage.getItem('use_mock_db') === 'true';
             if (useMock) {
-                return JSON.parse(localStorage.getItem('mock_games') || '[]');
+                const games = JSON.parse(localStorage.getItem('mock_games') || '[]');
+                return games.filter(g => g.is_deleted !== true && g.is_deleted !== 'TRUE' && g.is_deleted !== 1 && g.is_deleted !== '1');
             }
             try {
                 const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
                 const response = await fetch(endpoint + '?action=getGames');
                 const result = await response.json();
-                if (result.status === 'success') return result.data;
+                if (result.status === 'success') return result.data.filter(g => g.is_deleted !== true && g.is_deleted !== 'TRUE' && g.is_deleted !== 1 && g.is_deleted !== '1');
                 throw new Error(result.error || 'Failed to fetch games.');
             } catch (error) {
                 console.warn('getGames API failed, using mock:', error);
-                return JSON.parse(localStorage.getItem('mock_games') || '[]');
+                const games = JSON.parse(localStorage.getItem('mock_games') || '[]');
+                return games.filter(g => g.is_deleted !== true && g.is_deleted !== 'TRUE' && g.is_deleted !== 1 && g.is_deleted !== '1');
             }
         },
 
@@ -559,7 +585,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const useMock = localStorage.getItem('use_mock_db') === 'true';
             if (useMock) {
                 const games = JSON.parse(localStorage.getItem('mock_games') || '[]');
-                localStorage.setItem('mock_games', JSON.stringify(games.filter(g => g.game_id !== gameId)));
+                const idx = games.findIndex(g => g.game_id === gameId);
+                if (idx !== -1) games[idx].is_deleted = true;
+                localStorage.setItem('mock_games', JSON.stringify(games));
                 return { status: 'success' };
             }
             try {
@@ -574,7 +602,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(result.error || 'Failed to delete game.');
             } catch (error) {
                 const games = JSON.parse(localStorage.getItem('mock_games') || '[]');
-                localStorage.setItem('mock_games', JSON.stringify(games.filter(g => g.game_id !== gameId)));
+                const idx = games.findIndex(g => g.game_id === gameId);
+                if (idx !== -1) games[idx].is_deleted = true;
+                localStorage.setItem('mock_games', JSON.stringify(games));
                 return { status: 'success' };
             }
         }
@@ -1151,6 +1181,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 <div class="table-responsive"><table class="data-table">
                     <thead>
                         <tr>
+                            <th>No.</th>
                             <th>Exam ID</th>
                             <th>Title</th>
                             <th>Duration</th>
@@ -1162,13 +1193,14 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     <tbody>
             `;
 
-            exams.forEach(exam => {
+            exams.forEach((exam, idx) => {
                 const isActive = exam.active === true || exam.active === 'TRUE' || exam.active === '1' || exam.active === 1;
                 const formattedDate = exam.created_at ? new Date(exam.created_at).toLocaleString() : 'N/A';
                 const examStr = JSON.stringify(exam);
                 
                 table += `
                     <tr>
+                        <td>${idx + 1}</td>
                         <td><strong>${exam.exam_id}</strong></td>
                         <td>${exam.title}</td>
                         <td>${exam.duration_minutes} mins</td>
@@ -1220,6 +1252,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     };
 
     window.manageExamQuestions = async function(examId) {
+        window.currentViewingExamId = examId; // Save context for auto reload
+        
         // Switch to Questions tab using pill-style approach
         document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
         ['tab-exams-content','tab-questions-content','tab-submissions-content','tab-games-content']
@@ -1848,7 +1882,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         const errors = [];
         const rowNum = rowIndex + 2;
 
-        const validTypes = ['multiple_choice', 'true_false', 'fill_blank', 'arrange_sentence', 'vocabulary', 'matching', 'short_answer'];
+        const validTypes = ['single_choice', 'multiple_choice', 'true_false', 'fill_blank', 'arrange_sentence', 'vocabulary', 'matching', 'short_answer'];
         if (!row.type) {
             errors.push(`Row ${rowNum}: 'type' is missing.`);
         } else if (!validTypes.includes(String(row.type).trim().toLowerCase())) {
@@ -2050,6 +2084,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             document.getElementById('import-preview-container').style.display = 'none';
             questionsToImport = [];
             loadExamsList();
+            await loadQuestionBank();
 
         } catch (error) {
             console.error('Error importing questions:', error);
@@ -2150,7 +2185,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
         try {
             const rawQuestions = await db.getQuestions(examId);
-            loadedQuestions = rawQuestions.map(decodeQuestionFields);
+            loadedQuestions = rawQuestions.map(decodeQuestionFields).reverse(); // Reverse to sort by insertion DESC
 
             if (loadedQuestions.length === 0) {
                 container.innerHTML = `
@@ -2229,13 +2264,13 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             </div>`;
         }
 
-        const headers = ['Actions', 'question_id', 'type', 'level', 'question_text', 'correct_answer', 'points'];
+        const headers = ['Actions', 'No.', 'question_id', 'type', 'level', 'question_text', 'correct_answer', 'points'];
 
         let table = bannerHtml + '<div class="table-responsive"><table class="data-table"><thead><tr>';
         headers.forEach(header => table += `<th>${header.replace(/_/g, ' ').toUpperCase()}</th>`);
         table += '</tr></thead><tbody>';
 
-        questions.forEach(q => {
+        questions.forEach((q, idx) => {
             const qStr = JSON.stringify(q);
 
             table += `<tr data-question-id="${q.question_id}">`;
@@ -2247,6 +2282,9 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     <button class="delete-btn" title="Delete Question" onclick="deleteQuestion('${q.question_id}', '${q.exam_id}')">🗑</button>
                 </td>
             `;
+
+            // No.
+            table += `<td>${idx + 1}</td>`;
 
             table += `<td>${q.question_id || ''}</td>`;
             table += `<td><span class="badge badge-primary">${q.type || ''}</span></td>`;
@@ -4218,6 +4256,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 <div class="table-responsive"><table class="data-table">
                     <thead>
                         <tr>
+                            <th>No.</th>
                             <th>Exam ID</th>
                             <th>Exam Title</th>
                             <th>Active State</th>
@@ -4228,11 +4267,12 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     <tbody>
             `;
 
-            exams.forEach(exam => {
+            exams.forEach((exam, idx) => {
                 const count = submissions.filter(s => String(s.exam_id) === String(exam.exam_id)).length;
                 const isActive = exam.active === true || exam.active === 'TRUE' || exam.active === '1' || exam.active === 1;
                 table += `
                     <tr>
+                        <td>${idx + 1}</td>
                         <td><strong>${exam.exam_id}</strong></td>
                         <td>${exam.title}</td>
                         <td>
@@ -4286,6 +4326,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 <div class="table-responsive"><table class="data-table">
                     <thead>
                         <tr>
+                            <th>No.</th>
                             <th>Student Name</th>
                             <th>Class</th>
                             <th>Score (Scale 10)</th>
@@ -4298,7 +4339,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     <tbody>
             `;
 
-            examSubs.forEach(sub => {
+            examSubs.forEach((sub, idx) => {
                 const score = sub.score !== undefined ? sub.score : 'N/A';
                 const percentage = sub.percentage !== undefined ? sub.percentage : 'N/A';
                 const minutes = Math.floor(sub.duration_seconds / 60);
@@ -4308,6 +4349,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 
                 table += `
                     <tr>
+                        <td>${idx + 1}</td>
                         <td><strong>${sub.student_name}</strong></td>
                         <td>${sub.class_name}</td>
                         <td style="font-weight: 800; color: var(--primary);">${score} / 10</td>
@@ -4654,6 +4696,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     document.addEventListener('click', function(e) {
         const btn = e.target.closest('button, input[type="submit"], input[type="button"], .btn-primary, .btn-danger, .btn-secondary, .edit-btn, .delete-btn');
         if (btn) {
+            // Exclude confirmation modal buttons from being locked
+            if (btn.closest('#bento-confirm-modal')) {
+                return;
+            }
+
             if (btn.dataset.spamLocked === 'true') {
                 e.stopPropagation();
                 e.stopImmediatePropagation();
@@ -4671,13 +4718,13 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 btn.style.cursor = 'wait';
             }, 10);
             
-            // Unlock after 1.5 seconds minimum (adjusting for async finishes)
+            // Unlock after 500ms minimum (adjusting for async finishes)
             setTimeout(() => {
                 btn.dataset.spamLocked = 'false';
                 btn.style.pointerEvents = 'auto';
                 btn.style.opacity = btn.dataset.originalOpacity || '';
                 btn.style.cursor = '';
-            }, 1500);
+            }, 500);
         }
     }, true);
 
