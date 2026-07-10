@@ -2,6 +2,7 @@ const API_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzmrkmQbjI-cEpYn86
 
 let questionsToImport = [];
 let loadedQuestions = []; // Cached questions for the active admin exam
+let aiStagingQuestions = [];
 
 // Helper to escape single quotes in strings for onclick handlers
 const escapeSingleQuotes = (str) => {
@@ -44,17 +45,17 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     document.body.appendChild(confirmModal);
 
-    window.showToast = function(message, type = 'info') {
+    window.showToast = function (message, type = 'info') {
         let tContainer = document.getElementById('bento-toast-container');
-        if(!tContainer) return;
+        if (!tContainer) return;
         const t = document.createElement('div');
         t.className = `bento-toast bento-toast-${type}`;
         let icon = '&#8505;';
-        if(type==='success') icon = '&#10003;';
-        if(type==='error') icon = '&#10007;';
+        if (type === 'success') icon = '&#10003;';
+        if (type === 'error') icon = '&#10007;';
         t.innerHTML = `<i>${icon}</i> <span>${message}</span>`;
         tContainer.appendChild(t);
-        
+
         requestAnimationFrame(() => requestAnimationFrame(() => {
             t.classList.add('bento-toast-show');
         }));
@@ -67,21 +68,21 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(removeToast, 4000);
     };
 
-    window.showConfirm = function(title, message, onConfirm) {
+    window.showConfirm = function (title, message, onConfirm) {
         const modal = document.getElementById('bento-confirm-modal');
-        if(!modal) {
-            if(confirm(title + "\n" + message)) if(onConfirm) onConfirm();
+        if (!modal) {
+            if (confirm(title + "\n" + message)) if (onConfirm) onConfirm();
             return;
         }
         document.getElementById('bento-confirm-title').innerText = title;
         document.getElementById('bento-confirm-body').innerHTML = message;
-        
+
         const okBtn = document.getElementById('bento-confirm-ok');
         const cancelBtn = document.getElementById('bento-confirm-cancel');
-        
+
         const cleanup = () => {
             modal.classList.remove('active');
-            
+
             // Clean up lock state and styles defensively before cloning
             okBtn.dataset.spamLocked = 'false';
             cancelBtn.dataset.spamLocked = 'false';
@@ -95,28 +96,28 @@ document.addEventListener('DOMContentLoaded', () => {
             okBtn.replaceWith(okBtn.cloneNode(true));
             cancelBtn.replaceWith(cancelBtn.cloneNode(true));
         };
-        
-        okBtn.addEventListener('click', () => { cleanup(); if(onConfirm) onConfirm(); });
+
+        okBtn.addEventListener('click', () => { cleanup(); if (onConfirm) onConfirm(); });
         cancelBtn.addEventListener('click', () => { cleanup(); });
-        
+
         modal.classList.add('active');
     };
 
     // Override Alert
-    window.alert = function(msg) {
-        if(!msg) return;
+    window.alert = function (msg) {
+        if (!msg) return;
         let type = 'info';
         let s = msg.toString().toLowerCase();
-        if(s.includes('thành công') || s.includes('success')) type = 'success';
-        if(s.includes('lỗi') || s.includes('error') || s.includes('thất bại') || s.includes('fail')) type = 'error';
-        if(window.showToast) window.showToast(msg, type);
+        if (s.includes('thành công') || s.includes('success')) type = 'success';
+        if (s.includes('lỗi') || s.includes('error') || s.includes('thất bại') || s.includes('fail')) type = 'error';
+        if (window.showToast) window.showToast(msg, type);
     };
 
 
     const appContainer = document.getElementById('app-container');
-    
+
     // Global Overlay Loader Helpers
-    window.showLoader = function(message = 'Đang xử lý dữ liệu...') {
+    window.showLoader = function (message = 'Đang xử lý dữ liệu...') {
         let loader = document.getElementById('global-db-loader');
         if (!loader) {
             loader = document.createElement('div');
@@ -132,7 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loader.style.display = 'flex';
     };
 
-    window.hideLoader = function() {
+    window.hideLoader = function () {
         const loader = document.getElementById('global-db-loader');
         if (loader) {
             loader.style.display = 'none';
@@ -401,14 +402,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const idx = exams.findIndex(e => e.exam_id === examId);
                 if (idx !== -1) exams[idx].is_deleted = true;
                 localStorage.setItem('mock_exams', JSON.stringify(exams));
-                
+
                 // Soft delete questions
                 const questions = JSON.parse(localStorage.getItem('mock_questions') || '[]');
                 questions.forEach(q => {
                     if (q.exam_id === examId) q.is_deleted = true;
                 });
                 localStorage.setItem('mock_questions', JSON.stringify(questions));
-                
+
                 return { status: 'success', message: 'Exam and questions deleted locally' };
             }
             try {
@@ -746,6 +747,84 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
 
+                    <!-- AI Question Generator Card -->
+                    <div class="bento-card" style="margin-bottom: 1.5rem; background: var(--bg-item); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 1.5rem; box-shadow: var(--shadow-sm); box-sizing: border-box; text-align: left;">
+                        <h3 style="margin-top: 0; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">✨ AI Question Generator (Gemini AI)</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: -0.5rem; margin-bottom: 1.25rem;">
+                            Tự động soạn câu hỏi tiếng Anh thông minh theo chủ đề và dạng bài tập tùy chọn.
+                        </p>
+                        
+                        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; margin-bottom: 1rem; align-items: start;">
+                            <div>
+                                <label for="ai-prompt-topic" style="font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.25rem; color: var(--text-main);">Chủ đề học tập hoặc Đoạn văn mẫu:</label>
+                                <textarea id="ai-prompt-topic" placeholder="Ví dụ: Relative clauses, Conditional sentences, hoặc dán một đoạn văn tiếng Anh để tạo câu hỏi đọc hiểu..." style="width: 100%; height: 140px; border: 2px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.6rem; box-sizing: border-box; font-family: var(--font); resize: vertical; line-height: 1.4;"></textarea>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 0.75rem;">
+                                    <div>
+                                        <label for="ai-model-select" style="font-weight: 700; font-size: 0.85rem; display: block; margin-bottom: 0.25rem; color: var(--text-main);">AI Model:</label>
+                                        <select id="ai-model-select" style="width: 100%; border: 2px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem; box-sizing: border-box; background: white; font-family: var(--font); font-size: 0.85rem; font-weight: 600;">
+                                            <option value="gemini-1.5-flash" selected>1.5 Flash (Default)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="ai-level-select" style="font-weight: 700; font-size: 0.85rem; display: block; margin-bottom: 0.25rem; color: var(--text-main);">Độ khó:</label>
+                                        <select id="ai-level-select" style="width: 100%; border: 2px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem; box-sizing: border-box; background: white; font-family: var(--font); font-size: 0.85rem; font-weight: 600;">
+                                            <option value="easy">Easy</option>
+                                            <option value="medium" selected>Medium</option>
+                                            <option value="hard">Hard</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="ai-quantity-input" style="font-weight: 700; font-size: 0.85rem; display: block; margin-bottom: 0.25rem; color: var(--text-main);">Số lượng câu:</label>
+                                        <input type="number" id="ai-quantity-input" value="5" min="1" max="15" style="width: 100%; border: 2px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem; box-sizing: border-box; font-family: var(--font); font-size: 0.85rem; font-weight: 600;">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style="font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.25rem; color: var(--text-main);">Các dạng bài tập (Chọn nhiều):</label>
+                                    <div id="ai-types-checkboxes" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; font-size: 0.85rem; overflow-y: auto; border: 2px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem; background: white; box-sizing: border-box;">
+                                        <div style="display: flex; align-items: center; gap: 0.25rem;"><input type="checkbox" id="ait-single" value="single_choice" checked> <label for="ait-single" style="cursor:pointer; font-weight:600;">Single Choice</label></div>
+                                        <div style="display: flex; align-items: center; gap: 0.25rem;"><input type="checkbox" id="ait-multi" value="multiple_choice"> <label for="ait-multi" style="cursor:pointer; font-weight:600;">Multiple Choice</label></div>
+                                        <div style="display: flex; align-items: center; gap: 0.25rem;"><input type="checkbox" id="ait-tf" value="true_false"> <label for="ait-tf" style="cursor:pointer; font-weight:600;">True / False</label></div>
+                                        <div style="display: flex; align-items: center; gap: 0.25rem;"><input type="checkbox" id="ait-fill" value="fill_blank"> <label for="ait-fill" style="cursor:pointer; font-weight:600;">Fill Blank</label></div>
+                                        <div style="display: flex; align-items: center; gap: 0.25rem;"><input type="checkbox" id="ait-arrange" value="arrange_sentence"> <label for="ait-arrange" style="cursor:pointer; font-weight:600;">Arrange Sentence</label></div>
+                                        <div style="display: flex; align-items: center; gap: 0.25rem;"><input type="checkbox" id="ait-vocab" value="vocabulary"> <label for="ait-vocab" style="cursor:pointer; font-weight:600;">Vocabulary</label></div>
+                                        <div style="display: flex; align-items: center; gap: 0.25rem;"><input type="checkbox" id="ait-matching" value="matching"> <label for="ait-matching" style="cursor:pointer; font-weight:600;">Matching</label></div>
+                                        <div style="display: flex; align-items: center; gap: 0.25rem;"><input type="checkbox" id="ait-short" value="short_answer"> <label for="ait-short" style="cursor:pointer; font-weight:600;">Short Answer</label></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem;">
+                            <button id="ai-generate-btn" class="btn-primary" style="background: linear-gradient(135deg, var(--primary) 0%, #a855f7 100%);"><img src="images/ai.png" alt="AI" width="25" height="25"> Generate Questions by AI</button>
+                        </div>
+
+                        <!-- AI Staging & Preview Area -->
+                        <div id="ai-preview-container" style="display: none; margin-top: 1.5rem; border-top: 2px dashed var(--border-color); padding-top: 1.5rem; box-sizing: border-box;">
+                            <h4 style="margin-top: 0; display: flex; align-items: center; justify-content: space-between; font-size: 1.1rem; color: var(--text-main);">
+                                <span>📋 Xem trước danh sách câu hỏi AI soạn (<span id="ai-staging-count">0</span> câu)</span>
+                                <button id="ai-clear-staging-btn" class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background-color: var(--accent-light); color: var(--accent); border-color: rgba(255,107,107,0.2); font-weight: bold;">Xoá hết</button>
+                            </h4>
+                            
+                            <div id="ai-staging-list" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; max-height: 500px; overflow-y: auto; padding-right: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1rem; background: var(--bg-main);">
+                                <!-- Interactive edit cards will be rendered here -->
+                            </div>
+
+                            <div style="display: flex; align-items: center; justify-content: space-between; background: var(--primary-light); padding: 1rem; border-radius: var(--radius); border: 1px solid rgba(79, 70, 229, 0.15); box-sizing: border-box; flex-wrap: wrap; gap: 1rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <label for="ai-import-exam-select" style="font-weight: 700; color: var(--primary); font-size: 0.95rem;">Đề thi đích:</label>
+                                    <select id="ai-import-exam-select" style="border: 2px solid var(--primary); border-radius: var(--radius-sm); padding: 0.4rem; font-family: var(--font); font-weight: 600; background: white;">
+                                        <option value="">-- Chọn Đề thi --</option>
+                                    </select>
+                                </div>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button id="ai-generate-more-btn" class="btn-secondary" style="background: white; border: 2px solid var(--primary); color: var(--primary); font-weight: bold;">➕ Soạn thêm câu tương tự</button>
+                                    <button id="ai-commit-btn" class="btn-primary" style="font-weight: bold; background: var(--primary);">💾 Nhập câu hỏi vào Đề thi</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <hr style="border: 1px solid var(--border-color); margin: 1.5rem 0;">
 
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -824,7 +903,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Pill Tab Switching Logic
         const allTabBtns = document.querySelectorAll('.admin-tab-btn');
-        const allTabContents = ['tab-exams-content','tab-questions-content','tab-submissions-content','tab-games-content']
+        const allTabContents = ['tab-exams-content', 'tab-questions-content', 'tab-submissions-content', 'tab-games-content']
             .map(id => document.getElementById(id));
 
         const tabExamsBtn = document.getElementById('tab-exams-btn');
@@ -866,7 +945,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Settings Button modal trigger
         document.getElementById('open-settings-btn').addEventListener('click', showSettingsModal);
-        
+
         // Guide Button modal trigger
         const guideBtn = document.getElementById('open-guide-btn');
         if (guideBtn) guideBtn.addEventListener('click', showGuideModal);
@@ -892,7 +971,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('Please select an Exam ID first in the filters to add a question directly to that exam!');
                 return;
             }
-            showEditModal({ exam_id: currentExamId }); 
+            showEditModal({ exam_id: currentExamId });
         });
 
         // Question search/filters event binds
@@ -920,6 +999,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Initially load exams list
+        initAiQuestionGenerator();
         loadExamsList();
     }
 
@@ -991,7 +1071,7 @@ Thêm các hoạt động giải trí hoặc liên kết bài học Quizizz, Gim
 
 Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mượt mà cùng **EnglishTools**!`;
 
-    window.closeGuideModal = function() {
+    window.closeGuideModal = function () {
         const modal = document.getElementById('guide-modal');
         if (modal) modal.remove();
     };
@@ -1003,7 +1083,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         modal = document.createElement('div');
         modal.id = 'guide-modal';
         modal.className = 'modal';
-        
+
         modal.innerHTML = `
             <div class="modal-content" style="max-width: 850px; width: 95vw; max-height: 90vh; overflow-y: auto; padding-top: 0;">
                 <div class="modal-header" style="position: sticky; top: 0; background: #ffffff; z-index: 10; padding-top: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1rem;">
@@ -1021,7 +1101,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         document.body.appendChild(modal);
 
         const contentDiv = document.getElementById('guide-markdown-content');
-        
+
         try {
             // First attempt to fetch the fresh file from network exactly as it is saved on disk.
             const response = await fetch('Huong_dan_su_dung.md');
@@ -1033,7 +1113,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         } catch (e) {
             console.warn("Could not fetch MD file via network, falling back to embedded robust cache.", e);
         }
-        
+
         // Final fallback if fetch failed (usually due to CORS on file:// origin logic)
         renderMarkdown(MD_GUIDE_CONTENT, contentDiv);
     }
@@ -1058,7 +1138,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.id = 'settings-modal';
-        
+
         modal.innerHTML = `
             <div class="modal-content" style="max-width: 550px;">
                 <div class="modal-header">
@@ -1073,6 +1153,15 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         <button id="save-api-url-btn" class="btn-primary" style="flex:1;">Save URL & Use Cloud</button>
                         <button id="test-connection-btn" class="btn-secondary" style="flex:1;">Test Connection</button>
                     </div>
+                    
+                    <hr style="border: 0.5px solid var(--border-color); margin: 0.5rem 0;">
+                    <label for="gemini-key-input" style="font-weight:700;">Google Gemini API Key:</label>
+                    <input type="password" id="gemini-key-input" value="${localStorage.getItem('gemini_api_key') || ''}" placeholder="AIzaSy..." style="width:100%; border:2px solid var(--border-color); border-radius:var(--radius-sm); padding:0.6rem; box-sizing:border-box;">
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                        <button id="save-gemini-key-btn" class="btn-primary" style="flex:1; background: linear-gradient(135deg, var(--primary) 0%, #a855f7 100%); border: none; font-weight: bold;">Save Gemini Key</button>
+                    </div>
+
+                    <hr style="border: 0.5px solid var(--border-color); margin: 0.5rem 0;">
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                         <button id="use-mock-btn" class="btn-secondary" style="flex:1;">Toggle Offline Mode</button>
                         <button id="reset-db-btn" class="btn-secondary" style="flex:1; background-color: var(--accent-light); color: var(--accent); border-color: rgba(255, 107, 107, 0.2);">Reset Mock DB</button>
@@ -1089,6 +1178,25 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         const mockBtn = document.getElementById('use-mock-btn');
         const resetBtn = document.getElementById('reset-db-btn');
         const statusMsg = document.getElementById('api-status-msg');
+
+        const geminiInput = document.getElementById('gemini-key-input');
+        const saveGeminiBtn = document.getElementById('save-gemini-key-btn');
+
+        saveGeminiBtn.addEventListener('click', () => {
+            const keyVal = geminiInput.value.trim();
+            if (keyVal) {
+                localStorage.setItem('gemini_api_key', keyVal);
+                statusMsg.textContent = 'Gemini API Key Saved!';
+                statusMsg.style.color = '#15803d';
+                // Trigger dynamic registry models reload
+                populateAiModels(keyVal);
+            } else {
+                localStorage.removeItem('gemini_api_key');
+                statusMsg.textContent = 'Gemini API Key Removed!';
+                statusMsg.style.color = '#b45309';
+                populateAiModels(null);
+            }
+        });
 
         saveApiBtn.addEventListener('click', () => {
             const val = apiInput.value.trim();
@@ -1136,8 +1244,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             const currentMock = localStorage.getItem('use_mock_db') === 'true';
             localStorage.setItem('use_mock_db', (!currentMock).toString());
             updateDbStatusIndicator();
-            statusMsg.textContent = !currentMock 
-                ? 'Switched to Local Offline Database Mode!' 
+            statusMsg.textContent = !currentMock
+                ? 'Switched to Local Offline Database Mode!'
                 : 'Switched to Cloud API Mode!';
             statusMsg.style.color = !currentMock ? '#b45309' : '#15803d';
             loadExamsList();
@@ -1157,7 +1265,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         });
     }
 
-    window.closeSettingsModal = function() {
+    window.closeSettingsModal = function () {
         const modal = document.getElementById('settings-modal');
         if (modal) modal.remove();
     };
@@ -1165,12 +1273,12 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     async function loadExamsList() {
         const container = document.getElementById('exams-table-container');
         if (!container) return;
-        
+
         showLoader('Loading exams...');
         container.innerHTML = '<p class="loading-message">Loading exams...</p>';
         try {
             const examsResponse = await db.getExams();
-            const exams = examsResponse.sort((a, b) => new Date(b.created_at || parseInt((b.exam_id||'').split('_').pop()) || 0) - new Date(a.created_at || parseInt((a.exam_id||'').split('_').pop()) || 0));
+            const exams = examsResponse.sort((a, b) => new Date(b.created_at || parseInt((b.exam_id || '').split('_').pop()) || 0) - new Date(a.created_at || parseInt((a.exam_id || '').split('_').pop()) || 0));
             if (exams.length === 0) {
                 container.innerHTML = '<p class="info-message">No exams found. Click "Create New Exam" to create one!</p>';
                 hideLoader();
@@ -1197,7 +1305,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 const isActive = exam.active === true || exam.active === 'TRUE' || exam.active === '1' || exam.active === 1;
                 const formattedDate = exam.created_at ? new Date(exam.created_at).toLocaleString() : 'N/A';
                 const examStr = JSON.stringify(exam);
-                
+
                 table += `
                     <tr>
                         <td>${idx + 1}</td>
@@ -1232,7 +1340,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         }
     }
 
-    window.copyStudentLink = function(examId) {
+    window.copyStudentLink = function (examId) {
         const origin = window.location.origin;
         let pathname = window.location.pathname;
         if (pathname.endsWith('index.html') || pathname.endsWith('/')) {
@@ -1240,9 +1348,9 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         } else if (!pathname.includes('student.html')) {
             pathname = pathname + (pathname.endsWith('/') ? '' : '/') + 'student.html';
         }
-        
+
         const link = `${origin}${pathname}?examId=${examId}`;
-        
+
         navigator.clipboard.writeText(link).then(() => {
             alert(`Copied student exam link:\n${link}`);
         }).catch(err => {
@@ -1251,12 +1359,12 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         });
     };
 
-    window.manageExamQuestions = async function(examId) {
+    window.manageExamQuestions = async function (examId) {
         window.currentViewingExamId = examId; // Save context for auto reload
-        
+
         // Switch to Questions tab using pill-style approach
         document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
-        ['tab-exams-content','tab-questions-content','tab-submissions-content','tab-games-content']
+        ['tab-exams-content', 'tab-questions-content', 'tab-submissions-content', 'tab-games-content']
             .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
         const tabQuestionsBtn = document.getElementById('tab-questions-btn');
         const tabQuestionsContent = document.getElementById('tab-questions-content');
@@ -1273,7 +1381,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         }
     };
 
-    window.deleteExam = async function(examId) {
+    window.deleteExam = async function (examId) {
         window.showConfirm('Delete Exam', `Are you sure you want to delete exam "${examId}"`, async () => {
             showLoader('Deleting exam and related questions...');
             try {
@@ -1289,13 +1397,13 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     };
 
     // ─── GAME MANAGER ──────────────────────────────────────────
-    window.showPrintExamModal = function(examId) {
+    window.showPrintExamModal = function (examId) {
         // Remove existing if any
         if (document.getElementById('print-exam-modal')) document.getElementById('print-exam-modal').remove();
 
         const modal = document.createElement('div');
         modal.id = 'print-exam-modal';
-        modal.className = 'modal'; 
+        modal.className = 'modal';
         modal.style.zIndex = '99999'; // ensure it's not hidden
         modal.innerHTML = `
             <div class="modal-content" style="max-width:450px;">
@@ -1328,7 +1436,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         document.body.appendChild(modal);
     };
 
-    window.executePrintExam = async function(examId, withAnswers) {
+    window.executePrintExam = async function (examId, withAnswers) {
         const qtyInput = document.getElementById('print-copies-qty');
         const numCopies = qtyInput ? parseInt(qtyInput.value) || 1 : 1;
 
@@ -1409,11 +1517,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 `;
 
                 shuffledQ.forEach((q, index) => {
-                                        const qText = decodeUtf8Mangle(String(q.question_text || ''));
+                    const qText = decodeUtf8Mangle(String(q.question_text || ''));
                     htmlStr += `<div class="question">`;
                     const displayQText = (q.type === 'arrange_sentence') ? 'Arrange the words to make a correct sentence:' : qText;
                     htmlStr += `<div class="question-text">Câu ${index + 1}: ${displayQText}</div>`;
-                    
+
                     const optA = decodeUtf8Mangle(q.option_a);
                     const optB = decodeUtf8Mangle(q.option_b);
                     const optC = decodeUtf8Mangle(q.option_c);
@@ -1447,9 +1555,9 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         }
                     } else if (q.type === 'matching') {
                         if (withAnswers) {
-                           htmlStr += `<div class="options" style="font-style:italic;">Đáp án nối: <span class="correct-ans">${corAns}</span></div>`;
+                            htmlStr += `<div class="options" style="font-style:italic;">Đáp án nối: <span class="correct-ans">${corAns}</span></div>`;
                         } else {
-                           htmlStr += `<div class="options" style="display:block; margin-top:5px;">(Học sinh nối/điền đáp án thích hợp)</div>`;
+                            htmlStr += `<div class="options" style="display:block; margin-top:5px;">(Học sinh nối/điền đáp án thích hợp)</div>`;
                         }
                     } else if (q.type === 'arrange_sentence') {
                         const targetSentence = (q.question_text && q.question_text.length > 2) ? q.question_text : (q.correct_answer || '');
@@ -1462,7 +1570,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                             htmlStr += `<div class="options" style="display:block; margin-top:10px;">.............................................................................</div>`;
                         }
                     }
-                    
+
                     htmlStr += `</div>`;
                 });
 
@@ -1502,11 +1610,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     async function loadGamesList() {
         const container = document.getElementById('games-grid-container');
         if (!container) return;
-        
+
         // Bind create game button before any return statement
         const createBtn = document.getElementById('open-create-game-btn');
         if (createBtn) createBtn.onclick = () => showGameModal(null);
-        
+
         container.innerHTML = '<p class="loading-message">Loading games...</p>';
         try {
             const gamesResp = await db.getGames();
@@ -1529,7 +1637,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         <p class="game-card-title">${g.name || 'Game'}</p>
                         <p class="game-card-url" title="${g.url}">🔗 ${g.url || 'N/A'}</p>
                         <div class="game-card-actions">
-                            <button class="btn-copy-url" onclick="copyGameUrl('${(g.url||'').replace(/'/g,'\\&apos;')}')">📋 Copy URL</button>
+                            <button class="btn-copy-url" onclick="copyGameUrl('${(g.url || '').replace(/'/g, '\\&apos;')}')">📋 Copy URL</button>
                             <a class="btn-play-game" href="${g.url}" target="_blank" rel="noopener">▶️ Open</a>
                         </div>
                         <div class="game-card-actions" style="margin-top:0.3rem;">
@@ -1544,11 +1652,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         }
     }
 
-    window.copyGameUrl = function(url) {
+    window.copyGameUrl = function (url) {
         navigator.clipboard.writeText(url).then(() => alert('Copied URL: ' + url)).catch(() => prompt('Copy URL:', url));
     };
 
-    window.deleteGameEntry = async function(gameId) {
+    window.deleteGameEntry = async function (gameId) {
         window.showConfirm('Delete Game', 'Are you sure you want to delete this game?', async () => {
             showLoader('Deleting game...');
             try {
@@ -1559,7 +1667,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         });
     };
 
-    window.showGameModal = function(game) {
+    window.showGameModal = function (game) {
         const isEdit = game && game.game_id;
         const modal = document.createElement('div');
         modal.className = 'modal';
@@ -1576,17 +1684,17 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         <div style="display:flex;flex-direction:column;gap:0.75rem;">
                             <div>
                                 <label style="font-weight:700;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Game Name <span class="required-star">*</span></label>
-                                <input id="game-name" type="text" value="${isEdit?(game.name||''):''}" placeholder="VD: Kahoot Vocabulary" required
+                                <input id="game-name" type="text" value="${isEdit ? (game.name || '') : ''}" placeholder="VD: Kahoot Vocabulary" required
                                     style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
                             </div>
                             <div>
                                 <label style="font-weight:700;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Game URL <span class="required-star">*</span></label>
-                                <input id="game-url" type="url" value="${isEdit?(game.url||''):''}" placeholder="https://kahoot.it/..." required
+                                <input id="game-url" type="url" value="${isEdit ? (game.url || '') : ''}" placeholder="https://kahoot.it/..." required
                                     style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
                             </div>
                             <div>
                                 <label style="font-weight:700;font-size:0.9rem;display:block;margin-bottom:0.25rem;">Image URL</label>
-                                <input id="game-image" type="url" value="${isEdit?(game.image_url||''):''}" placeholder="https://...image.png"
+                                <input id="game-image" type="url" value="${isEdit ? (game.image_url || '') : ''}" placeholder="https://...image.png"
                                     style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
                                 <p style="font-size:0.78rem;color:var(--text-muted);margin:0.25rem 0 0;">Leave empty if no image — use 🎮 emoji instead.</p>
                             </div>
@@ -1620,7 +1728,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         });
     };
 
-    window.showExamModal = function(exam) {
+    window.showExamModal = function (exam) {
         const isEdit = exam !== null;
         const generatedId = isEdit ? exam.exam_id : 'ENG_' + Date.now().toString().slice(-6);
         const modal = document.createElement('div');
@@ -1695,7 +1803,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             data.show_result = document.getElementById('modal-exam-show-res').checked;
             data.active = document.getElementById('modal-exam-active').checked;
             data.duration_minutes = parseInt(data.duration_minutes) || 15;
-            
+
             showLoader('Đang lưu thông tin đề thi...');
             try {
                 if (isEdit) {
@@ -1721,7 +1829,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         });
     };
 
-    window.closeExamModal = function() {
+    window.closeExamModal = function () {
         const modal = document.getElementById('exam-modal');
         if (modal) modal.remove();
     };
@@ -1770,17 +1878,17 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 </div>
             </div>
         `;
-        
+
         // Check URL params
         const urlParams = new URLSearchParams(window.location.search);
         const urlExamId = urlParams.get('exam_id') || urlParams.get('examId');
-        
+
         if (urlExamId) {
             populateStudentExamsDropdown().then(() => {
                 const selectEl = document.getElementById('exam-select');
                 // Select the option explicitly
                 selectEl.value = urlExamId;
-                
+
                 if (selectEl.selectedIndex > 0) { // Found a match
                     document.getElementById('exam-selection-group').style.display = 'none';
                     document.getElementById('url-exam-info').style.display = 'block';
@@ -1802,29 +1910,45 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
      */
     async function populateExamsDropdown() {
         const select = document.getElementById('qbm-exam-select');
+        const aiSelect = document.getElementById('ai-import-exam-select');
         if (!select) return;
 
         select.innerHTML = '<option value="">Loading exams...</option>';
         select.disabled = true;
 
+        if (aiSelect) {
+            aiSelect.innerHTML = '<option value="">Loading exams...</option>';
+            aiSelect.disabled = true;
+        }
+
         try {
             const exams = await db.getExams();
             if (exams.length > 0) {
                 select.innerHTML = '<option value="">-- Select Exam ID --</option>';
+                if (aiSelect) aiSelect.innerHTML = '<option value="">-- Chọn Đề thi --</option>';
+
                 exams.forEach(exam => {
                     const option = document.createElement('option');
                     option.value = exam.exam_id;
                     option.textContent = `${exam.title} (${exam.exam_id})`;
                     select.appendChild(option);
+
+                    if (aiSelect) {
+                        const aiOption = option.cloneNode(true);
+                        aiSelect.appendChild(aiOption);
+                    }
                 });
             } else {
                 select.innerHTML = '<option value="">No exams found</option>';
+                if (aiSelect) aiSelect.innerHTML = '<option value="">Không tìm thấy đề thi</option>';
             }
         } catch (error) {
             console.error('Error fetching exams:', error);
             select.innerHTML = '<option value="">Error loading exams</option>';
+            if (aiSelect) aiSelect.innerHTML = '<option value="">Lỗi tải đề thi</option>';
         } finally {
             select.disabled = false;
+            if (aiSelect) aiSelect.disabled = false;
         }
     }
 
@@ -1848,7 +1972,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     option.dataset.exam = JSON.stringify(exam);
                     select.appendChild(option);
                 });
-                
+
                 // If there's an exam ID in URL query, pre-select it!
                 const urlParams = new URLSearchParams(window.location.search);
                 const urlExamId = urlParams.get('examId');
@@ -1863,7 +1987,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 }
             } else {
                 select.innerHTML = '<option value="">Không tìm thấy bài kiểm tra nào khả dụng</option>';
-                
+
                 // Redirect if student accessed an invalid exam URL directly
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.get('examId')) {
@@ -1929,35 +2053,35 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 const firstSheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[firstSheetName];
                 const json = XLSX.utils.sheet_to_json(worksheet);
-                
+
                 if (json.length === 0) {
                     alert('Excel file is empty.');
                     return;
                 }
-                
+
                 const examSelect = document.getElementById('qbm-exam-select');
                 const selectedExamId = examSelect ? examSelect.value : '';
-                
+
                 if (!selectedExamId) {
                     window.alert('Vui lòng chọn Mã Đề (Exam ID) từ menu phía trên trước khi Import.');
                     return;
                 }
-                
+
                 // Validate questions
                 const processedQuestions = [];
                 let errorCount = 0;
-                
+
                 const tableRows = [];
                 json.forEach((rawRow, index) => {
                     const row = normalizeRowKeys(rawRow);
                     const validationErrors = validateQuestionRow(row, index, new Set(), new Set());
-                    
+
                     const isValid = validationErrors.length === 0;
                     if (!isValid) errorCount++;
-                    
+
                     const processed = {
                         question_id: 'Q' + Date.now().toString().slice(-6) + Math.floor(Math.random() * 1000) + index,
-                        exam_id: selectedExamId, 
+                        exam_id: selectedExamId,
                         type: row.type ? String(row.type).trim().toLowerCase() : '',
                         level: row.level ? String(row.level).trim().toLowerCase() : 'medium',
                         question_text: row.question_text ? String(row.question_text).trim() : '',
@@ -1972,36 +2096,36 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         tags: row.tags ? String(row.tags).trim() : '',
                         active: row.active === undefined || row.active === 'TRUE' || row.active === true || row.active === 1 || row.active === '1'
                     };
-                    
+
                     if (processed.type === 'arrange_sentence') {
                         processed.correct_answer = processed.question_text;
                     }
-                    
+
                     processedQuestions.push(processed);
-                    
+
                     // Generate preview row row
                     tableRows.push(`
                         <tr class="${isValid ? '' : 'invalid-row'}" style="${isValid ? '' : 'background-color: var(--accent-light);'}">
-                            <td>Row ${index+2}</td>
+                            <td>Row ${index + 2}</td>
                             <td>${processed.question_id || '<span style="color:var(--accent);font-weight:bold;">Missing</span>'}</td>
                             <td>${processed.type || '<span style="color:var(--accent);font-weight:bold;">Missing</span>'}</td>
                             <td class="question-text-cell" title="${processed.question_text}">${processed.question_text || ''}</td>
                             <td>${processed.correct_answer || '<span style="color:var(--accent);font-weight:bold;">Missing</span>'}</td>
                             <td>
-                                ${isValid 
-                                    ? '<span class="preview-status valid">✅ Valid</span>' 
-                                    : `<span class="preview-status invalid" title="${validationErrors.join(', ')}">❌ Invalid (${validationErrors.length})</span>`}
+                                ${isValid
+                            ? '<span class="preview-status valid">✅ Valid</span>'
+                            : `<span class="preview-status invalid" title="${validationErrors.join(', ')}">❌ Invalid (${validationErrors.length})</span>`}
                             </td>
                         </tr>
                     `);
                 });
-                
+
                 questionsToImport = processedQuestions;
-                
+
                 const previewContainer = document.getElementById('import-preview-container');
                 const tableContainer = document.getElementById('preview-table-container');
                 const confirmBtn = document.getElementById('confirm-import-btn');
-                
+
                 tableContainer.innerHTML = `
                     <table border="1">
                         <thead>
@@ -2019,9 +2143,9 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         </tbody>
                     </table>
                 `;
-                
+
                 previewContainer.style.display = 'block';
-                
+
                 if (errorCount > 0) {
                     confirmBtn.disabled = true;
                     confirmBtn.textContent = `Fix errors (${errorCount}) to Import`;
@@ -2156,11 +2280,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         try {
             await db.saveExam(examData);
             alert('Exam created successfully!');
-            
+
             const examLinkContainer = document.getElementById('exam-link-container');
             const examLinkInput = document.getElementById('exam-link');
             const copyLinkBtn = document.getElementById('copy-link-btn');
-            
+
             const examLink = `${window.location.origin}${window.location.pathname}?examId=${examData.exam_id}`;
             examLinkInput.value = examLink;
             examLinkContainer.style.display = 'block';
@@ -2242,7 +2366,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             filtered = filtered.filter(q => q.level === levelFilter);
         }
         if (searchFilter) {
-            filtered = filtered.filter(q => 
+            filtered = filtered.filter(q =>
                 String(q.question_text).toLowerCase().includes(searchFilter) ||
                 String(q.question_id).toLowerCase().includes(searchFilter)
             );
@@ -2256,17 +2380,23 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         renderQuestionBankTable(filtered);
     }
 
+    // Module-level store for current QB table data (used by edit buttons via event listeners)
+    let _qbTableData = [];
+
     function renderQuestionBankTable(questions) {
+        // Save reference so edit listeners can safely access full question objects
+        _qbTableData = questions;
+
         const container = document.getElementById('question-bank-container');
-        
+
         let bannerHtml = '';
         const examSelect = document.getElementById('qbm-exam-select');
         const selectedExamId = examSelect ? examSelect.value : '';
-        
+
         if (selectedExamId && examSelect.selectedIndex > 0) {
             const selectedText = examSelect.options[examSelect.selectedIndex].textContent;
             const examTitle = selectedText.replace(` (${selectedExamId})`, '');
-            
+
             bannerHtml = `
             <div style="background-color: #f0f7ff; padding: 1.25rem; border-radius: var(--radius); border: 1px solid rgba(77, 150, 255, 0.3); margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
                 <div>
@@ -2286,14 +2416,12 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         table += '</tr></thead><tbody>';
 
         questions.forEach((q, idx) => {
-            const qStr = JSON.stringify(q);
-
             table += `<tr data-question-id="${q.question_id}">`;
 
-            // Actions
+            // Actions — use data-idx (NO JSON in onclick) so special chars in question fields don't break the button
             table += `
                 <td class="actions-cell">
-                    <button class="edit-btn" title="Edit Question" onclick='showEditModal(${qStr})'>🖍</button>
+                    <button class="edit-btn qb-edit-btn" title="Edit Question" data-idx="${idx}">🖍</button>
                     <button class="delete-btn" title="Delete Question" onclick="deleteQuestion('${q.question_id}', '${q.exam_id}')">🗑</button>
                 </td>
             `;
@@ -2304,8 +2432,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             table += `<td>${q.question_id || ''}</td>`;
             table += `<td><span class="badge badge-primary">${q.type || ''}</span></td>`;
             table += `<td><span class="badge badge-secondary">${q.level || ''}</span></td>`;
-            table += `<td class="question-text-cell" title="${q.question_text || ''}">${q.question_text || ''}</td>`;
-            table += `<td class="question-text-cell" title="${q.correct_answer || ''}">${q.correct_answer || ''}</td>`;
+            table += `<td class="question-text-cell" title="${(q.question_text || '').replace(/"/g, '&quot;')}">${q.question_text || ''}</td>`;
+            table += `<td class="question-text-cell" title="${(q.correct_answer || '').replace(/"/g, '&quot;')}">${q.correct_answer || ''}</td>`;
             table += `<td>${q.points || '1'}</td>`;
 
             table += `</tr>`;
@@ -2313,6 +2441,15 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
         table += '</tbody></table></div>';
         container.innerHTML = table;
+
+        // Attach event listeners to edit buttons — reads question safely from questions array by index
+        container.querySelectorAll('.qb-edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.idx);
+                const q = _qbTableData[idx];
+                if (q) window.showEditModal(q);
+            });
+        });
     }
 
     const TYPE_HINTS = {
@@ -2337,8 +2474,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         fill_blank: {
             emoji: '✏️',
             hint: 'Để trống Option A-D. Câu hỏi có dạng: "They usually ___ to school." → correct_answer = "walk".',
-            optionALabel:'', optionBLabel:'', optionCLabel:'', optionDLabel:'',
-            optionAPlaceholder:'', optionBPlaceholder:'', optionCPlaceholder:'', optionDPlaceholder:'',
+            optionALabel: '', optionBLabel: '', optionCLabel: '', optionDLabel: '',
+            optionAPlaceholder: '', optionBPlaceholder: '', optionCPlaceholder: '', optionDPlaceholder: '',
             correctPlaceholder: 'VD: walk',
             acceptedPlaceholder: '["walk","walks"]',
             showOptions: false, correctRequired: true
@@ -2346,8 +2483,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         true_false: {
             emoji: '☑️',
             hint: 'Câu hỏi đúng/sai. Correct Answer phải là TRUE hoặc FALSE.',
-            optionALabel:'', optionBLabel:'', optionCLabel:'', optionDLabel:'',
-            optionAPlaceholder:'', optionBPlaceholder:'', optionCPlaceholder:'', optionDPlaceholder:'',
+            optionALabel: '', optionBLabel: '', optionCLabel: '', optionDLabel: '',
+            optionAPlaceholder: '', optionBPlaceholder: '', optionCPlaceholder: '', optionDPlaceholder: '',
             correctPlaceholder: 'TRUE hoặc FALSE',
             acceptedPlaceholder: '["TRUE","True","true"]',
             showOptions: false, correctRequired: true
@@ -2356,7 +2493,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             emoji: '📖',
             hint: 'Giống multiple choice — 4 lựa chọn A/B/C/D về nghĩa của từ. Correct Answer là nghĩa đúng.',
             optionALabel: 'Nghĩa A', optionBLabel: 'Nghĩa B', optionCLabel: 'Nghĩa C', optionDLabel: 'Nghĩa D',
-            optionAPlaceholder:'Nghĩa 1', optionBPlaceholder:'Nghĩa 2', optionCPlaceholder:'Nghĩa 3', optionDPlaceholder:'Nghĩa 4',
+            optionAPlaceholder: 'Nghĩa 1', optionBPlaceholder: 'Nghĩa 2', optionCPlaceholder: 'Nghĩa 3', optionDPlaceholder: 'Nghĩa 4',
             correctPlaceholder: 'VD: Thư viện',
             acceptedPlaceholder: '["Thư viện"]',
             showOptions: true, correctRequired: true
@@ -2365,7 +2502,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             emoji: '📝',
             hint: 'Nhập câu Tiếng Anh đúng hoàn chỉnh vào ô "Question Text". ĐÃ ẨN CÁC Ô ĐÁP ÁN BÊN DƯỚI. Ứng dụng sẽ xáo trộn câu này.',
             optionALabel: '', optionBLabel: '', optionCLabel: '', optionDLabel: '',
-            optionAPlaceholder:'', optionBPlaceholder:'', optionCPlaceholder:'', optionDPlaceholder:'',
+            optionAPlaceholder: '', optionBPlaceholder: '', optionCPlaceholder: '', optionDPlaceholder: '',
             correctPlaceholder: '',
             acceptedPlaceholder: '',
             showOptions: false, correctRequired: false
@@ -2374,7 +2511,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             emoji: '🔗',
             hint: 'Option A"key | value", B"key | value"... Correct Answer là JSON: {"cat":"mèo","dog":"chó"}. Có thể để trống để giáo viên chấm.',
             optionALabel: 'Cặp 1', optionBLabel: 'Cặp 2', optionCLabel: 'Cặp 3', optionDLabel: 'Cặp 4',
-            optionAPlaceholder:'VD: cat | mèo', optionBPlaceholder:'VD: dog | chó', optionCPlaceholder:'VD: bird | chim', optionDPlaceholder:'VD: fish | cá',
+            optionAPlaceholder: 'VD: cat | mèo', optionBPlaceholder: 'VD: dog | chó', optionCPlaceholder: 'VD: bird | chim', optionDPlaceholder: 'VD: fish | cá',
             correctPlaceholder: '{"cat":"mèo","dog":"chó"} (JSON) hoặc để trống',
             acceptedPlaceholder: '{"cat":"mèo","dog":"chó"}',
             showOptions: true, correctRequired: false
@@ -2382,8 +2519,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         short_answer: {
             emoji: '💬',
             hint: 'Câu hỏi tự luận — để trống Correct Answer nếu giáo viên chấm tay. Options không cần điền.',
-            optionALabel:'', optionBLabel:'', optionCLabel:'', optionDLabel:'',
-            optionAPlaceholder:'', optionBPlaceholder:'', optionCPlaceholder:'', optionDPlaceholder:'',
+            optionALabel: '', optionBLabel: '', optionCLabel: '', optionDLabel: '',
+            optionAPlaceholder: '', optionBPlaceholder: '', optionCPlaceholder: '', optionDPlaceholder: '',
             correctPlaceholder: 'Để trống nếu giáo viên chấm tay',
             acceptedPlaceholder: '',
             showOptions: false, correctRequired: false
@@ -2395,7 +2532,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     }
 
     // Modal view for editing or adding question
-    window.showEditModal = function(q) {
+    window.showEditModal = function (q) {
         const isEdit = q.question_id !== undefined && q.question_id !== null && q.question_id !== '';
         // Auto-generate question ID for new questions
         const autoId = isEdit ? q.question_id : ('Q' + Date.now().toString().slice(-6));
@@ -2433,9 +2570,9 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                                     ${mkTooltip('Độ khó: easy (dễ), medium (trung bình), hard (khó).')}
                                 </div>
                                 <select id="edit-level" name="level" style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;font-family:var(--font);">
-                                    <option value="easy" ${q.level==='easy'?'selected':''}>🟢 Easy</option>
-                                    <option value="medium" ${(!q.level||q.level==='medium')?'selected':''}>🟡 Medium</option>
-                                    <option value="hard" ${q.level==='hard'?'selected':''}>🔴 Hard</option>
+                                    <option value="easy" ${q.level === 'easy' ? 'selected' : ''}>🟢 Easy</option>
+                                    <option value="medium" ${(!q.level || q.level === 'medium') ? 'selected' : ''}>🟡 Medium</option>
+                                    <option value="hard" ${q.level === 'hard' ? 'selected' : ''}>🔴 Hard</option>
                                 </select>
                             </div>
                             <div style="grid-column:1/-1;">
@@ -2444,14 +2581,14 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                                     ${mkTooltip('Loại câu hỏi – ảnh hưởng đến các ô bên dưới.')}
                                 </div>
                                 <select id="edit-type" name="type" required style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;font-family:var(--font);">
-                                    <option value="multiple_choice" ${currentType==='multiple_choice'?'selected':''}>🔤 Multiple Choice</option>
-                                    <option value="single_choice" ${currentType==='single_choice'?'selected':''}>🔘 Single Choice</option>
-                                    <option value="true_false" ${currentType==='true_false'?'selected':''}>☑️ True / False</option>
-                                    <option value="fill_blank" ${currentType==='fill_blank'?'selected':''}>✏️ Fill in Blank</option>
-                                    <option value="arrange_sentence" ${currentType==='arrange_sentence'?'selected':''}>🔀 Arrange Sentence</option>
-                                    <option value="vocabulary" ${currentType==='vocabulary'?'selected':''}>📖 Vocabulary</option>
-                                    <option value="matching" ${currentType==='matching'?'selected':''}>🔗 Matching</option>
-                                    <option value="short_answer" ${currentType==='short_answer'?'selected':''}>💬 Short Answer</option>
+                                    <option value="multiple_choice" ${currentType === 'multiple_choice' ? 'selected' : ''}>🔤 Multiple Choice</option>
+                                    <option value="single_choice" ${currentType === 'single_choice' ? 'selected' : ''}>🔘 Single Choice</option>
+                                    <option value="true_false" ${currentType === 'true_false' ? 'selected' : ''}>☑️ True / False</option>
+                                    <option value="fill_blank" ${currentType === 'fill_blank' ? 'selected' : ''}>✏️ Fill in Blank</option>
+                                    <option value="arrange_sentence" ${currentType === 'arrange_sentence' ? 'selected' : ''}>🔀 Arrange Sentence</option>
+                                    <option value="vocabulary" ${currentType === 'vocabulary' ? 'selected' : ''}>📖 Vocabulary</option>
+                                    <option value="matching" ${currentType === 'matching' ? 'selected' : ''}>🔗 Matching</option>
+                                    <option value="short_answer" ${currentType === 'short_answer' ? 'selected' : ''}>💬 Short Answer</option>
                                 </select>
                                 <div id="type-hint-box" class="type-hint-box">
                                     <span class="hint-icon">💡</span>
@@ -2469,24 +2606,24 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                             ${mkTooltip('Nội dung câu hỏi. Với fill_blank, dùng ___ để đánh dấu chỗ trống.')}
                         </div>
                         <textarea id="edit-text" name="question_text" required rows="3"
-                            style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);resize:vertical;">${isEdit?(q.question_text||''):''}</textarea>
+                            style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);resize:vertical;">${isEdit ? (q.question_text || '') : ''}</textarea>
 
                         <div id="edit-options-fields" style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.75rem;">
                             <div>
                                 <div class="field-label-row"><label id="lbl-opt-a" for="edit-option-a">Option A</label></div>
-                                <input type="text" id="edit-option-a" name="option_a" value="${isEdit?(q.option_a||''):''}" placeholder="" style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                                <input type="text" id="edit-option-a" name="option_a" value="${isEdit ? (q.option_a || '') : ''}" placeholder="" style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
                             </div>
                             <div>
                                 <div class="field-label-row"><label id="lbl-opt-b" for="edit-option-b">Option B</label></div>
-                                <input type="text" id="edit-option-b" name="option_b" value="${isEdit?(q.option_b||''):''}" placeholder="" style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                                <input type="text" id="edit-option-b" name="option_b" value="${isEdit ? (q.option_b || '') : ''}" placeholder="" style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
                             </div>
                             <div>
                                 <div class="field-label-row"><label id="lbl-opt-c" for="edit-option-c">Option C</label></div>
-                                <input type="text" id="edit-option-c" name="option_c" value="${isEdit?(q.option_c||''):''}" placeholder="" style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                                <input type="text" id="edit-option-c" name="option_c" value="${isEdit ? (q.option_c || '') : ''}" placeholder="" style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
                             </div>
                             <div>
                                 <div class="field-label-row"><label id="lbl-opt-d" for="edit-option-d">Option D</label></div>
-                                <input type="text" id="edit-option-d" name="option_d" value="${isEdit?(q.option_d||''):''}" placeholder="" style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                                <input type="text" id="edit-option-d" name="option_d" value="${isEdit ? (q.option_d || '') : ''}" placeholder="" style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
                             </div>
                         </div>
                     </div>
@@ -2523,7 +2660,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                                         ${mkTooltip('Đáp án đúng chính xác. Với matching: JSON {"key":"val"}. Với short_answer: có thể để trống.')}
                                     </div>
                                     <input type="text" id="edit-correct" name="correct_answer"
-                                        value="${isEdit?(q.correct_answer||''):''}" placeholder=""
+                                        value="${isEdit ? (q.correct_answer || '') : ''}" placeholder=""
                                         style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
                                 </div>
                                 <div>
@@ -2532,7 +2669,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                                         ${mkTooltip('Các đáp án chấp nhận. Dạng JSON array: ["answer1","answer2"]. Dùng khi có nhiều cách viết đúng.')}
                                     </div>
                                     <input type="text" id="edit-accepted" name="accepted_answers"
-                                        value='${isEdit?(q.accepted_answers||''):''}' placeholder='["answer"]'
+                                        value='${isEdit ? (q.accepted_answers || '') : ''}' placeholder='["answer"]'
                                         style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
                                 </div>
                             </div>
@@ -2544,7 +2681,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                                 ${mkTooltip('Giải thích đáp án – hiển thị cho học sinh sau khi nộp bài (nếu bật Show Result).')}
                             </div>
                             <textarea id="edit-explanation" name="explanation" rows="2"
-                                style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);resize:vertical;">${isEdit?(q.explanation||''):''}</textarea>
+                                style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);resize:vertical;">${isEdit ? (q.explanation || '') : ''}</textarea>
                         </div>
                     </div>
 
@@ -2558,7 +2695,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                                     ${mkTooltip('Điểm số của câu hỏi này (chấp nhận số thập phân, VD: 1.5).')}
                                 </div>
                                 <input type="number" id="edit-points" name="points"
-                                    value="${isEdit?(q.points||1):1}" min="0.5" step="0.5"
+                                    value="${isEdit ? (q.points || 1) : 1}" min="0.5" step="0.5"
                                     style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
                             </div>
                             <div>
@@ -2567,13 +2704,13 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                                     ${mkTooltip('Nhãn phân loại câu hỏi. Nhiều nhãn cách nhau bằng dấu phẩy: grammar,present-simple')}
                                 </div>
                                 <input type="text" id="edit-tags" name="tags"
-                                    value="${isEdit?(q.tags||''):''}" placeholder="grammar,vocabulary"
+                                    value="${isEdit ? (q.tags || '') : ''}" placeholder="grammar,vocabulary"
                                     style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
                             </div>
                         </div>
                         <div class="checkbox-wrapper" style="margin-top:0.75rem;">
                             <input type="checkbox" id="edit-active" name="active"
-                                ${(isEdit?(q.active===true||q.active==='TRUE'||q.active==='1'||q.active===1):true)?'checked':''}>
+                                ${(isEdit ? (q.active === true || q.active === 'TRUE' || q.active === '1' || q.active === 1) : true) ? 'checked' : ''}>
                             <label for="edit-active">Active (hiện câu hỏi này trong bài thi)</label>
                         </div>
                     </div>
@@ -2602,7 +2739,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             if (ansArea) {
                 ansArea.style.display = (type === 'arrange_sentence') ? 'none' : 'block';
             }
-            
+
             // Show/hide the ENTIRE Answer Section Wrapper if arrange_sentence
             const sectionAnswerWrapper = document.getElementById('section-answer-wrapper');
             if (sectionAnswerWrapper) {
@@ -2610,7 +2747,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             }
             // Update option labels and placeholders
             if (cfg.showOptions) {
-                ['a','b','c','d'].forEach(x => {
+                ['a', 'b', 'c', 'd'].forEach(x => {
                     const lbl = document.getElementById(`lbl-opt-${x}`);
                     const inp = document.getElementById(`edit-option-${x}`);
                     if (lbl) lbl.textContent = cfg[`option${x.toUpperCase()}Label`] || `Option ${x.toUpperCase()}`;
@@ -2657,7 +2794,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                             acceptedVals = parsed.map(v => String(v).trim());
                         }
                     }
-                } catch (e) {}
+                } catch (e) { }
 
                 const currentVal = correctInput.value.trim();
                 mcGroup.querySelectorAll('.ans-btn').forEach(btn => {
@@ -2745,7 +2882,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         // Extend applyTypeHints to also setup buttons
         const origApply = applyTypeHints;
         const applyAll = (type) => { origApply(type); setupAnswerButtons(type); };
-        typeSelect.removeEventListener('change', () => {});
+        typeSelect.removeEventListener('change', () => { });
         typeSelect.addEventListener('change', () => applyAll(typeSelect.value));
         applyAll(currentType);
 
@@ -2764,7 +2901,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             fd.forEach((val, key) => { data[key] = val; });
             data.active = document.getElementById('edit-active').checked;
             data.points = parseFloat(data.points) || 1;
-            
+
             if (data.type === 'arrange_sentence') {
                 data.correct_answer = data.question_text;
             }
@@ -2793,12 +2930,12 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         });
     };
 
-    window.closeEditModal = function() {
+    window.closeEditModal = function () {
         const modal = document.getElementById('edit-question-modal');
         if (modal) modal.remove();
     };
 
-    window.deleteQuestion = async function(questionId, examId) {
+    window.deleteQuestion = async function (questionId, examId) {
         window.showConfirm('Delete Question', `Are you sure you want to delete question "${questionId}"?`, async () => {
             showLoader('Đang xóa câu hỏi...');
             try {
@@ -2859,7 +2996,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         const className = document.getElementById('class_name').value.trim();
         const examSelect = document.getElementById('exam-select');
         const examId = examSelect.value;
-        
+
         if (!studentName || !className || !examId) {
             alert('Please fill in all fields.');
             isStartingExam = false;
@@ -2967,7 +3104,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         // Store exam state
         window.currentExamState = {
             exam: examData,
-            questions: clientQuestions, 
+            questions: clientQuestions,
             student: { name: studentName, class: className },
             answers: restoredAnswers || new Array(clientQuestions.length).fill(null),
             currentQuestionIndex: restoredIndex,
@@ -2990,7 +3127,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 if (currentAnswer) {
                     const arranged = currentAnswer.trim().split(/\s+/).filter(w => w !== '');
                     window.currentExamState.arrangedAnswers[q.question_id] = arranged;
-                    
+
                     const pool = [...originalWords];
                     arranged.forEach(word => {
                         const idx = pool.indexOf(word);
@@ -3004,7 +3141,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     window.currentExamState.arrangedAnswers[q.question_id] = [];
                 }
             }
-            
+
             // Matching state
             if (q.type === 'matching') {
                 const leftItems = [];
@@ -3039,7 +3176,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             if (/[\u00C0-\u00DF][\u0080-\u00BF]/.test(str)) {
                 return decodeURIComponent(escape(str));
             }
-        } catch (e) {}
+        } catch (e) { }
         return str;
     }
 
@@ -3136,16 +3273,16 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 </div>
             </div>
         `;
-        
+
         document.getElementById('prev-btn').addEventListener('click', prevQuestion);
         document.getElementById('next-btn').addEventListener('click', nextQuestion);
         document.getElementById('submit-btn').addEventListener('click', () => submitExam(false));
         document.getElementById('submit-now-btn').addEventListener('click', () => submitExam(false));
-        
+
         renderCurrentQuestion();
         startTimer(durationMinutes, window.currentExamState.remainingSeconds);
     }
-    
+
     function startTimer(durationMinutes, restoredRemaining = null) {
         const timerEl = document.getElementById('timer');
         let totalSeconds = restoredRemaining !== null ? restoredRemaining : durationMinutes * 60;
@@ -3164,7 +3301,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             if (totalSeconds <= 0) {
                 stopTimer();
                 alert('Time is up! Your exam will be submitted automatically.');
-                submitExam(true); 
+                submitExam(true);
             }
             if (totalSeconds <= 60) {
                 timerEl.style.color = '#d32f2f'; // Blink red
@@ -3193,7 +3330,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         if (!window.currentExamState) return;
         localStorage.removeItem(`exam_draft_${window.currentExamState.exam.exam_id}`);
     }
-    
+
     function renderCurrentQuestion() {
         const { questions, currentQuestionIndex, answers } = window.currentExamState;
         const question = questions[currentQuestionIndex];
@@ -3282,12 +3419,12 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         } else if (question.type === 'matching') {
             const leftItems = window.currentExamState.matchingLeftItems[question.question_id] || [];
             const rightShuffled = window.currentExamState.matchingRightShuffled[question.question_id] || [];
-            
+
             let matchedObj = {};
             if (studentAnswer) {
                 try {
                     matchedObj = JSON.parse(studentAnswer);
-                } catch (e) {}
+                } catch (e) { }
             }
 
             optionsHtml = '<div class="matching-container">';
@@ -3343,7 +3480,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     }
 
     // Handles Option selection (MCQ multi-select, True/False single, Vocabulary single)
-    window.handleOptionSelect = function(option) {
+    window.handleOptionSelect = function (option) {
         const { currentQuestionIndex, questions } = window.currentExamState;
         const question = questions[currentQuestionIndex];
 
@@ -3364,7 +3501,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     };
 
     // Handles input values (Fill Blank, Short Answer)
-    window.handleTextAnswerSelect = function(val) {
+    window.handleTextAnswerSelect = function (val) {
         const { currentQuestionIndex } = window.currentExamState;
         window.currentExamState.answers[currentQuestionIndex] = val;
         saveDraft();
@@ -3372,39 +3509,39 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     };
 
     // Handles word pool clicking (Arrange Sentence)
-    window.handleAddWord = function(questionId, wordIndex) {
+    window.handleAddWord = function (questionId, wordIndex) {
         const state = window.currentExamState;
         const pool = state.shuffledPools[questionId];
         const arranged = state.arrangedAnswers[questionId];
-        
+
         const word = pool.splice(wordIndex, 1)[0];
         arranged.push(word);
-        
+
         state.answers[state.currentQuestionIndex] = arranged.join(' ');
         saveDraft();
         renderCurrentQuestion();
     };
 
-    window.handleRemoveWord = function(questionId, wordIndex) {
+    window.handleRemoveWord = function (questionId, wordIndex) {
         const state = window.currentExamState;
         const pool = state.shuffledPools[questionId];
         const arranged = state.arrangedAnswers[questionId];
-        
+
         const word = arranged.splice(wordIndex, 1)[0];
         pool.push(word);
-        
+
         state.answers[state.currentQuestionIndex] = arranged.join(' ');
         saveDraft();
         renderCurrentQuestion();
     };
 
     // Handles matching select dropdown shifts
-    window.handleMatchingSelect = function(questionId, leftItem, selectedRight) {
+    window.handleMatchingSelect = function (questionId, leftItem, selectedRight) {
         const state = window.currentExamState;
         let matchedObj = {};
         const currentAnswer = state.answers[state.currentQuestionIndex];
         if (currentAnswer) {
-            try { matchedObj = JSON.parse(currentAnswer); } catch (e) {}
+            try { matchedObj = JSON.parse(currentAnswer); } catch (e) { }
         }
 
         if (selectedRight === '') {
@@ -3417,7 +3554,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         saveDraft();
         window.updateNavigatorStatus();
     };
-    
+
     function nextQuestion() {
         if (window.currentExamState.currentQuestionIndex < window.currentExamState.questions.length - 1) {
             window.currentExamState.currentQuestionIndex++;
@@ -3438,8 +3575,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         document.getElementById('next-btn').style.display = currentQuestionIndex === questions.length - 1 ? 'none' : 'inline-block';
         document.getElementById('submit-btn').style.display = currentQuestionIndex === questions.length - 1 ? 'inline-block' : 'none';
     }
-    
-    window.updateNavigatorStatus = function() {
+
+    window.updateNavigatorStatus = function () {
         if (!window.currentExamState) return;
         const { questions, currentQuestionIndex, answers } = window.currentExamState;
         const navCircles = document.querySelectorAll('.nav-circle');
@@ -3447,7 +3584,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         navCircles.forEach((circle, index) => {
             circle.classList.remove('current');
             if (index === currentQuestionIndex) circle.classList.add('current');
-            
+
             const ans = answers[index];
             let isAnswered = false;
             if (ans !== null && ans !== undefined && ans !== '') {
@@ -3456,7 +3593,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         try {
                             const parsed = JSON.parse(ans);
                             if (Object.keys(parsed).length > 0) isAnswered = true;
-                        } catch(e) {}
+                        } catch (e) { }
                     } else {
                         isAnswered = true;
                     }
@@ -3471,7 +3608,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         });
     };
 
-    window.jumpToQuestion = function(index) {
+    window.jumpToQuestion = function (index) {
         if (index >= 0 && index < window.currentExamState.questions.length) {
             window.currentExamState.currentQuestionIndex = index;
             renderCurrentQuestion();
@@ -3495,7 +3632,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         try {
                             const parsed = JSON.parse(ans);
                             if (Object.keys(parsed).length > 0) isAnswered = true;
-                        } catch(e) {}
+                        } catch (e) { }
                     } else {
                         isAnswered = true;
                     }
@@ -3574,14 +3711,14 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         };
     }
 
-    window.closeSubmitConfirmModal = function() {
+    window.closeSubmitConfirmModal = function () {
         const modal = document.getElementById('submit-confirm-modal');
         if (modal) modal.remove();
     };
 
     async function performActualSubmission() {
         showLoader('Đang chấm điểm và gửi bài làm lên hệ thống...');
-        
+
         try {
             stopTimer();
             const endTime = new Date();
@@ -3615,14 +3752,14 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         return String(value)
             .trim()
             .toLowerCase()
-            .replace(/\s+/g, ' ') 
+            .replace(/\s+/g, ' ')
             .replace(/[.!?]$/, '')
             .trim();
     }
 
     function gradeExam() {
         const { questions, answers, student, exam, durationSeconds } = window.currentExamState;
-        
+
         let score = 0;
         let total_points = 0;
         let correct_count = 0;
@@ -3693,12 +3830,12 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     // Evaluate matches proportionally
                     let correctPairs = 0;
                     let totalPairs = 0;
-                    
+
                     let correctMap = {};
-                    try { correctMap = JSON.parse(correct_answer); } catch(e) {}
-                    
+                    try { correctMap = JSON.parse(correct_answer); } catch (e) { }
+
                     let studentMap = {};
-                    try { studentMap = JSON.parse(student_answer); } catch(e) {}
+                    try { studentMap = JSON.parse(student_answer); } catch (e) { }
 
                     const keys = Object.keys(correctMap);
                     totalPairs = keys.length;
@@ -3761,7 +3898,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         // Sum earned points
         const finalScore = detailed_results.reduce((sum, item) => sum + item.points_earned, 0);
         const finalPercentage = total_points > 0 ? (finalScore / total_points) * 100 : 0;
-        
+
         // Calculate 10-point scale rounded to nearest 0.25
         const scale10Raw = total_points > 0 ? (finalScore / total_points) * 10 : 0;
         const scale10Rounded = Math.round(scale10Raw * 4) / 4;
@@ -3800,13 +3937,13 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 try {
                     const parsed = JSON.parse(trimmed);
                     if (Array.isArray(parsed)) return parsed.join(', ');
-                } catch(e) {}
+                } catch (e) { }
             }
             if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
                 try {
                     const parsed = JSON.parse(trimmed);
                     return Object.keys(parsed).map(k => `${k} ➜ ${parsed[k]}`).join(', ');
-                } catch(e) {}
+                } catch (e) { }
             }
             return ans;
         }
@@ -3856,7 +3993,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         details.forEach((item, index) => {
             const isCorrect = item.is_correct === 'TRUE';
             const needsReview = item.need_manual_review === 'TRUE';
-            
+
             let statusText = '❌ Incorrect';
             let cardClass = 'incorrect';
             if (isCorrect) {
@@ -3979,7 +4116,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         try {
             statusDiv.className = 'sync-pending';
             statusDiv.innerHTML = `<span>⏳ Gửi dữ liệu điểm số lên Server...</span>`;
-            
+
             const responseData = await db.submitResult(result);
 
             if (responseData.status === 'success') {
@@ -3989,7 +4126,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 } else {
                     statusDiv.innerHTML = `<span>✅ Kết quả đã đồng bộ thành công lên Server!</span>`;
                 }
-                
+
                 // Clear from pending submissions if it was there
                 removePendingSubmission(result.summary.submission_id);
             } else {
@@ -4006,7 +4143,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         }
     }
 
-    window.retrySyncResult = async function(result) {
+    window.retrySyncResult = async function (result) {
         const statusDiv = document.getElementById('sync-status');
         if (statusDiv) {
             statusDiv.className = 'sync-pending';
@@ -4103,7 +4240,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             indicator.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
             document.body.appendChild(indicator);
         }
-        
+
         if (useMock) {
             indicator.innerHTML = '📁 Offline Local Database Mode';
             indicator.style.backgroundColor = 'var(--warning-light)';
@@ -4146,7 +4283,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             ];
             localStorage.setItem('mock_exams', JSON.stringify(sampleExams));
         }
-        
+
         if (!localStorage.getItem('mock_questions')) {
             const sampleQuestions = [
                 {
@@ -4247,8 +4384,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     option_b: '',
                     option_c: '',
                     option_d: '',
-                    correct_answer: '', 
-                    accepted_answers: '', 
+                    correct_answer: '',
+                    accepted_answers: '',
                     explanation: 'This question will be graded by your teacher.',
                     points: 5,
                     tags: 'writing',
@@ -4289,19 +4426,19 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     async function loadSubmissionsExams() {
         const container = document.getElementById('submissions-table-container');
         if (!container) return;
-        
+
         const backBtn = document.getElementById('back-to-submissions-summary-btn');
         if (backBtn) backBtn.style.display = 'none';
-        
+
         showLoader('Loading exams and submission counts...');
         document.getElementById('submissions-title').textContent = 'Student Submissions Summary';
         container.innerHTML = '<p class="loading-message">Loading exams and submission counts...</p>';
-        
+
         try {
             const examsResp = await db.getExams();
             const exams = examsResp.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
             const submissions = await db.getSubmissions();
-            
+
             if (exams.length === 0) {
                 container.innerHTML = '<p class="info-message">No exams found.</p>';
                 return;
@@ -4352,26 +4489,26 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         }
     }
 
-    window.viewExamSubmissions = async function(examId) {
+    window.viewExamSubmissions = async function (examId) {
         const container = document.getElementById('submissions-table-container');
         if (!container) return;
-        
+
         const backBtn = document.getElementById('back-to-submissions-summary-btn');
         if (backBtn) {
             backBtn.style.display = 'inline-block';
             backBtn.onclick = () => loadSubmissionsExams();
         }
-        
+
         showLoader('Loading student submissions...');
         document.getElementById('submissions-title').textContent = `Submissions for Exam: ${examId}`;
         container.innerHTML = '<p class="loading-message">Loading student submissions...</p>';
-        
+
         try {
             const submissions = await db.getSubmissions();
             const examSubs = submissions
                 .filter(s => String(s.exam_id) === String(examId))
                 .sort((a, b) => new Date(b.submitted_at || 0) - new Date(a.submitted_at || 0));
-            
+
             if (examSubs.length === 0) {
                 container.innerHTML = '<p class="info-message">No student submissions found for this exam yet.</p>';
                 return;
@@ -4401,7 +4538,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 const seconds = sub.duration_seconds % 60;
                 const durationStr = `${minutes}m ${seconds}s`;
                 const submittedDate = sub.submitted_at ? new Date(sub.submitted_at).toLocaleString() : 'N/A';
-                
+
                 table += `
                     <tr>
                         <td>${idx + 1}</td>
@@ -4428,7 +4565,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         }
     };
 
-    window.deleteSubmissionEntry = async function(submissionId, studentName, examId) {
+    window.deleteSubmissionEntry = async function (submissionId, studentName, examId) {
         window.showConfirm('Delete Submission', `Are you sure you want to delete the results of "${studentName}"`, async () => {
             showLoader('Deleting submission...');
             try {
@@ -4443,11 +4580,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         });
     };
 
-    window.viewSubmissionDetailsModal = async function(submissionId, studentName, examTitle) {
+    window.viewSubmissionDetailsModal = async function (submissionId, studentName, examTitle) {
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.id = 'submission-details-modal';
-        
+
         modal.innerHTML = `
             <div class="modal-content" style="max-width: 800px; max-height: 85vh; overflow-y: auto;">
                 <div class="modal-header">
@@ -4463,7 +4600,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             </div>
         `;
         document.body.appendChild(modal);
-        
+
         const container = document.getElementById('modal-submission-details-container');
         showLoader('Loading answer details...');
         try {
@@ -4474,15 +4611,15 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             }
 
             let html = '<div class="submissions-detail-list" style="display:flex; flex-direction:column; gap:1.5rem; margin-top:1rem;">';
-            
+
             details.forEach((d, idx) => {
                 const isCorrect = d.is_correct === true || d.is_correct === 'TRUE';
                 const needReview = d.need_manual_review === true || d.need_manual_review === 'TRUE';
-                
+
                 let borderStyle = 'border: 2px solid var(--border-color)';
                 let badgeClass = 'badge-secondary';
                 let badgeText = 'Incorrect';
-                
+
                 if (isCorrect) {
                     borderStyle = 'border: 2px solid var(--secondary); background-color: var(--secondary-light);';
                     badgeClass = 'badge-primary';
@@ -4498,7 +4635,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
                 let showCorrect = formatAnswerForDisplay(d.correct_answer);
                 let showStudent = formatAnswerForDisplay(d.student_answer);
-                
+
                 html += `
                     <div class="result-card" style="padding: 1.2rem; border-radius: var(--radius-md); ${borderStyle}">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.5rem;">
@@ -4521,7 +4658,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     </div>
                 `;
             });
-            
+
             html += '</div>';
             container.innerHTML = html;
         } catch (e) {
@@ -4532,7 +4669,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         }
     };
 
-    window.closeSubmissionDetailsModal = function() {
+    window.closeSubmissionDetailsModal = function () {
         const modal = document.getElementById('submission-details-modal');
         if (modal) modal.remove();
     };
@@ -4550,137 +4687,137 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         ];
 
         const sampleRows = [
-        // 1. multiple_choice
-        {
-            type: 'multiple_choice',
-            level: 'medium',
-            question_text: 'Choose ALL correct verbs: She ___ to school.',
-            option_a: 'go',
-            option_b: 'goes',
-            option_c: 'went',
-            option_d: 'going',
-            correct_answer: 'goes, went',
-            accepted_answers: '["goes", "went"]',
-            explanation: "Could be present simple (goes) or past simple (went).",
-            points: 2,
-            tags: 'grammar',
-            active: 'TRUE'
-        },
-        // 2. single_choice
-        {
-            type: 'single_choice',
-            level: 'easy',
-            question_text: 'Choose ONE correct verb: She ___ to school every day.',
-            option_a: 'go',
-            option_b: 'goes',
-            option_c: 'went',
-            option_d: 'going',
-            correct_answer: 'goes',
-            accepted_answers: '["goes"]',
-            explanation: "In Present Simple, 'She' takes the verb ending in -es.",
-            points: 1,
-            tags: 'grammar;present-simple',
-            active: 'TRUE'
-        },
-        // 3. fill_blank
-        {
-            type: 'fill_blank',
-            level: 'easy',
-            question_text: 'Complete the sentence: My brother is ___ than me. (tall)',
-            option_a: '',
-            option_b: '',
-            option_c: '',
-            option_d: '',
-            correct_answer: 'taller',
-            accepted_answers: '["taller"]',
-            explanation: "Comparative form of 'tall' is 'taller'.",
-            points: 2,
-            tags: 'grammar;comparatives',
-            active: 'TRUE'
-        },
-        // 4. true_false
-        {
-            type: 'true_false',
-            level: 'easy',
-            question_text: 'True or False: The sun rises in the west.',
-            option_a: '',
-            option_b: '',
-            option_c: '',
-            option_d: '',
-            correct_answer: 'FALSE',
-            accepted_answers: '["False","false","FALSE"]',
-            explanation: 'The sun rises in the east.',
-            points: 1,
-            tags: 'general',
-            active: 'TRUE'
-        },
-        // 5. vocabulary
-        {
-            type: 'vocabulary',
-            level: 'easy',
-            question_text: "What is the meaning of the word 'teacher'?",
-            option_a: 'Student',
-            option_b: 'Doctor',
-            option_c: 'Person who teaches',
-            option_d: 'Engineer',
-            correct_answer: 'Person who teaches',
-            accepted_answers: '["Person who teaches"]',
-            explanation: 'A teacher is someone who teaches students.',
-            points: 2,
-            tags: 'vocabulary',
-            active: 'TRUE'
-        },
-        // 6. arrange_sentence
-        {
-            type: 'arrange_sentence',
-            level: 'medium',
-            question_text: 'We are learning English now .',
-            option_a: '',
-            option_b: '',
-            option_c: '',
-            option_d: '',
-            correct_answer: '',
-            accepted_answers: '',
-            explanation: 'Subject + be + V-ing + Object.',
-            points: 3,
-            tags: 'grammar',
-            active: 'TRUE'
-        },
-        // 7. matching
-        {
-            type: 'matching',
-            level: 'medium',
-            question_text: 'Match the animals with their Vietnamese meanings:',
-            option_a: 'cat | mèo',
-            option_b: 'dog | chó',
-            option_c: 'bird | chim',
-            option_d: 'fish | cá',
-            correct_answer: '{"cat":"mèo","dog":"chó","bird":"chim","fish":"cá"}',
-            accepted_answers: '{"cat":"mèo","dog":"chó","bird":"chim","fish":"cá"}',
-            explanation: 'Match each English word with its translation.',
-            points: 4,
-            tags: 'vocabulary',
-            active: 'TRUE'
-        },
-        // 8. short_answer
-        {
-            type: 'short_answer',
-            level: 'hard',
-            question_text: 'Describe what you do during English lessons in 1-2 sentences.',
-            option_a: '',
-            option_b: '',
-            option_c: '',
-            option_d: '',
-            correct_answer: '',
-            accepted_answers: '',
-            explanation: 'Graded manually by teacher.',
-            points: 5,
-            tags: 'writing',
-            active: 'TRUE'
-        }
-    ];
+            // 1. multiple_choice
+            {
+                type: 'multiple_choice',
+                level: 'medium',
+                question_text: 'Choose ALL correct verbs: She ___ to school.',
+                option_a: 'go',
+                option_b: 'goes',
+                option_c: 'went',
+                option_d: 'going',
+                correct_answer: 'goes, went',
+                accepted_answers: '["goes", "went"]',
+                explanation: "Could be present simple (goes) or past simple (went).",
+                points: 2,
+                tags: 'grammar',
+                active: 'TRUE'
+            },
+            // 2. single_choice
+            {
+                type: 'single_choice',
+                level: 'easy',
+                question_text: 'Choose ONE correct verb: She ___ to school every day.',
+                option_a: 'go',
+                option_b: 'goes',
+                option_c: 'went',
+                option_d: 'going',
+                correct_answer: 'goes',
+                accepted_answers: '["goes"]',
+                explanation: "In Present Simple, 'She' takes the verb ending in -es.",
+                points: 1,
+                tags: 'grammar;present-simple',
+                active: 'TRUE'
+            },
+            // 3. fill_blank
+            {
+                type: 'fill_blank',
+                level: 'easy',
+                question_text: 'Complete the sentence: My brother is ___ than me. (tall)',
+                option_a: '',
+                option_b: '',
+                option_c: '',
+                option_d: '',
+                correct_answer: 'taller',
+                accepted_answers: '["taller"]',
+                explanation: "Comparative form of 'tall' is 'taller'.",
+                points: 2,
+                tags: 'grammar;comparatives',
+                active: 'TRUE'
+            },
+            // 4. true_false
+            {
+                type: 'true_false',
+                level: 'easy',
+                question_text: 'True or False: The sun rises in the west.',
+                option_a: '',
+                option_b: '',
+                option_c: '',
+                option_d: '',
+                correct_answer: 'FALSE',
+                accepted_answers: '["False","false","FALSE"]',
+                explanation: 'The sun rises in the east.',
+                points: 1,
+                tags: 'general',
+                active: 'TRUE'
+            },
+            // 5. vocabulary
+            {
+                type: 'vocabulary',
+                level: 'easy',
+                question_text: "What is the meaning of the word 'teacher'?",
+                option_a: 'Student',
+                option_b: 'Doctor',
+                option_c: 'Person who teaches',
+                option_d: 'Engineer',
+                correct_answer: 'Person who teaches',
+                accepted_answers: '["Person who teaches"]',
+                explanation: 'A teacher is someone who teaches students.',
+                points: 2,
+                tags: 'vocabulary',
+                active: 'TRUE'
+            },
+            // 6. arrange_sentence
+            {
+                type: 'arrange_sentence',
+                level: 'medium',
+                question_text: 'We are learning English now .',
+                option_a: '',
+                option_b: '',
+                option_c: '',
+                option_d: '',
+                correct_answer: '',
+                accepted_answers: '',
+                explanation: 'Subject + be + V-ing + Object.',
+                points: 3,
+                tags: 'grammar',
+                active: 'TRUE'
+            },
+            // 7. matching
+            {
+                type: 'matching',
+                level: 'medium',
+                question_text: 'Match the animals with their Vietnamese meanings:',
+                option_a: 'cat | mèo',
+                option_b: 'dog | chó',
+                option_c: 'bird | chim',
+                option_d: 'fish | cá',
+                correct_answer: '{"cat":"mèo","dog":"chó","bird":"chim","fish":"cá"}',
+                accepted_answers: '{"cat":"mèo","dog":"chó","bird":"chim","fish":"cá"}',
+                explanation: 'Match each English word with its translation.',
+                points: 4,
+                tags: 'vocabulary',
+                active: 'TRUE'
+            },
+            // 8. short_answer
+            {
+                type: 'short_answer',
+                level: 'hard',
+                question_text: 'Describe what you do during English lessons in 1-2 sentences.',
+                option_a: '',
+                option_b: '',
+                option_c: '',
+                option_d: '',
+                correct_answer: '',
+                accepted_answers: '',
+                explanation: 'Graded manually by teacher.',
+                points: 5,
+                tags: 'writing',
+                active: 'TRUE'
+            }
+        ];
 
-    // 🚀 Build worksheet data 🚀──
+        // 🚀 Build worksheet data 🚀──
         const wsData = [headers];
         sampleRows.forEach(row => {
             wsData.push(headers.map(h => row[h] !== undefined ? row[h] : ''));
@@ -4688,25 +4825,25 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
         // ── Guide sheet data ──
         const guideData = [
-        ['Hướng dẫn sử dụng File Mẫu:'],
-        ['1. KHÔNG đổi tên các cột ở dòng số 1.'],
-        ['2. Import sẽ tự động nạp toàn bộ vào ID đề thi mà bạn đang chọn ở góc phải.'],
-        ['3. Cột type là CỰC KỲ QUAN TRỌNG, quyết định loại câu hỏi:'],
-        [],
-        ['TYPE', 'CÁCH NHẬP'],
-        ['single_choice',     'Điền 4 Lựa chọn A/B/C/D. Gõ Chính xác chữ của Lựa chọn đúng vào cột correct_answer'],
-        ['multiple_choice',   'Giống Single Choice nhưng cho phép chọn nhiều câu ở phía Học Sinh.'],
-        ['fill_blank',        'Điền từ vào chỗ trống -> correct_answer = từ đúng (thường Option A-D bỏ trống)'],
-        ['true_false',        'Đúng/Sai -> correct_answer = TRUE hoặc FALSE'],
-        ['vocabulary',        'Trắc nghiệm nghĩa -> giống single_choice'],
-        ['arrange_sentence',  'Sắp xếp câu -> CHỈ GHI ĐẦY ĐỦ CÂU ĐÚNG vào ô Question Text. Mọi ô đáp án & options để trống.'],
-        ['matching',          'Nối cặp chữ. Ghi các cặp vào Option A-D (Ví dụ: cat | mèo). Cột correct_answer ghi chuẩn JSON.'],
-        ['short_answer',      'Tự luận ngắn -> học sinh tự gõ. Giáo viên chấm tay. Bỏ trống các ô đáp án.'],
-        [],
-        ['ACCEPTED_ANSWERS (NÂNG CAO)', 'Định dạng bắt buộc: Mảng JSON nếu muốn hệ thống chấm nới lỏng'],
-        ['Ví dụ cho mảng',  '["goes", "went"]  hoặc  ["True","true","TRUE"]'],
-        ['Ví dụ JSON cho matching', '{"cat":"mèo","dog":"chó"}']
-    ];
+            ['Hướng dẫn sử dụng File Mẫu:'],
+            ['1. KHÔNG đổi tên các cột ở dòng số 1.'],
+            ['2. Import sẽ tự động nạp toàn bộ vào ID đề thi mà bạn đang chọn ở góc phải.'],
+            ['3. Cột type là CỰC KỲ QUAN TRỌNG, quyết định loại câu hỏi:'],
+            [],
+            ['TYPE', 'CÁCH NHẬP'],
+            ['single_choice', 'Điền 4 Lựa chọn A/B/C/D. Gõ Chính xác chữ của Lựa chọn đúng vào cột correct_answer'],
+            ['multiple_choice', 'Giống Single Choice nhưng cho phép chọn nhiều câu ở phía Học Sinh.'],
+            ['fill_blank', 'Điền từ vào chỗ trống -> correct_answer = từ đúng (thường Option A-D bỏ trống)'],
+            ['true_false', 'Đúng/Sai -> correct_answer = TRUE hoặc FALSE'],
+            ['vocabulary', 'Trắc nghiệm nghĩa -> giống single_choice'],
+            ['arrange_sentence', 'Sắp xếp câu -> CHỈ GHI ĐẦY ĐỦ CÂU ĐÚNG vào ô Question Text. Mọi ô đáp án & options để trống.'],
+            ['matching', 'Nối cặp chữ. Ghi các cặp vào Option A-D (Ví dụ: cat | mèo). Cột correct_answer ghi chuẩn JSON.'],
+            ['short_answer', 'Tự luận ngắn -> học sinh tự gõ. Giáo viên chấm tay. Bỏ trống các ô đáp án.'],
+            [],
+            ['ACCEPTED_ANSWERS (NÂNG CAO)', 'Định dạng bắt buộc: Mảng JSON nếu muốn hệ thống chấm nới lỏng'],
+            ['Ví dụ cho mảng', '["goes", "went"]  hoặc  ["True","true","TRUE"]'],
+            ['Ví dụ JSON cho matching', '{"cat":"mèo","dog":"chó"}']
+        ];
 
         // ── Create workbook using XLSX.js ──
         const wb = XLSX.utils.book_new();
@@ -4714,16 +4851,16 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         const wsQ = XLSX.utils.aoa_to_sheet(wsData);
         // Column widths
         wsQ['!cols'] = [
-            {wch:12},{wch:14},{wch:18},{wch:8},
-            {wch:42},
-            {wch:20},{wch:20},{wch:22},{wch:22},
-            {wch:30},{wch:32},
-            {wch:42},{wch:8},{wch:22},{wch:8}
+            { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 8 },
+            { wch: 42 },
+            { wch: 20 }, { wch: 20 }, { wch: 22 }, { wch: 22 },
+            { wch: 30 }, { wch: 32 },
+            { wch: 42 }, { wch: 8 }, { wch: 22 }, { wch: 8 }
         ];
         XLSX.utils.book_append_sheet(wb, wsQ, 'Questions');
 
         const wsG = XLSX.utils.aoa_to_sheet(guideData);
-        wsG['!cols'] = [{wch:30},{wch:70}];
+        wsG['!cols'] = [{ wch: 30 }, { wch: 70 }];
         XLSX.utils.book_append_sheet(wb, wsG, 'Huong dan');
 
         // ── Download as .xlsx ──
@@ -4748,7 +4885,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     syncPendingSubmissions();
 
     // GLOBAL ANTI-SPAM CLICK PROTECTION
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', function (e) {
         const btn = e.target.closest('button, input[type="submit"], input[type="button"], .btn-primary, .btn-danger, .btn-secondary, .edit-btn, .delete-btn');
         if (btn) {
             // Exclude confirmation modal buttons from being locked
@@ -4764,7 +4901,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             }
             // Lock the button
             btn.dataset.spamLocked = 'true';
-            
+
             // Visual disable in the next tick to ensure current click executes fully
             setTimeout(() => {
                 btn.style.pointerEvents = 'none';
@@ -4772,7 +4909,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 btn.style.opacity = '0.6';
                 btn.style.cursor = 'wait';
             }, 10);
-            
+
             // Unlock after 500ms minimum (adjusting for async finishes)
             setTimeout(() => {
                 btn.dataset.spamLocked = 'false';
@@ -4782,6 +4919,545 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             }, 500);
         }
     }, true);
+
+    function initAiQuestionGenerator() {
+        const generateBtn = document.getElementById('ai-generate-btn');
+        if (!generateBtn) return;
+
+        generateBtn.addEventListener('click', async () => {
+            const topic = document.getElementById('ai-prompt-topic').value.trim();
+            const level = document.getElementById('ai-level-select').value;
+            const quantity = parseInt(document.getElementById('ai-quantity-input').value) || 5;
+            const modelName = document.getElementById('ai-model-select').value;
+
+            // Get selected types
+            const checkedBoxes = document.querySelectorAll('#ai-types-checkboxes input:checked');
+            const selectedTypes = Array.from(checkedBoxes).map(cb => cb.value);
+
+            if (!topic) {
+                alert('Vui lòng nhập chủ đề hoặc đoạn văn mẫu để AI nhận diện ngữ cảnh.');
+                return;
+            }
+            if (selectedTypes.length === 0) {
+                alert('Vui lòng chọn ít nhất một dạng bài tập muốn sinh câu hỏi.');
+                return;
+            }
+
+            const geminiKey = localStorage.getItem('gemini_api_key');
+            if (!geminiKey) {
+                alert('Chưa cấu hình Gemini API Key. Vui lòng bấm vào biểu tượng bánh răng (Cấu hình) ở góc dưới bên trái để nhập API Key.');
+                return;
+            }
+
+            showLoader('Gemini AI đang soạn câu hỏi, vui lòng đợi...');
+            try {
+                const newQuestions = await callGeminiToGenerate(topic, level, quantity, selectedTypes, geminiKey, modelName);
+                if (newQuestions && newQuestions.length > 0) {
+                    aiStagingQuestions = newQuestions;
+                    renderStagingQuestions();
+                    document.getElementById('ai-preview-container').style.display = 'block';
+                    alert(`AI đã soạn thành công ${newQuestions.length} câu hỏi! Vui lòng kiểm tra lại phía dưới.`);
+                } else {
+                    alert('Gemini không trả về câu hỏi hợp lệ. Vui lòng thử lại với prompt khác.');
+                }
+            } catch (err) {
+                alert('Lỗi khi gọi Gemini API: ' + err.message);
+                console.error(err);
+            } finally {
+                hideLoader();
+            }
+        });
+
+        // Clear staging button
+        document.getElementById('ai-clear-staging-btn')?.addEventListener('click', () => {
+            if (confirm('Bạn có chắc chắn muốn xoá toàn bộ câu hỏi đang soạn thảo?')) {
+                aiStagingQuestions = [];
+                renderStagingQuestions();
+                document.getElementById('ai-preview-container').style.display = 'none';
+            }
+        });
+
+        // Generate more button
+        document.getElementById('ai-generate-more-btn')?.addEventListener('click', async () => {
+            const topic = document.getElementById('ai-prompt-topic').value.trim();
+            const level = document.getElementById('ai-level-select').value;
+            const quantity = parseInt(document.getElementById('ai-quantity-input').value) || 5;
+            const modelName = document.getElementById('ai-model-select').value;
+            const checkedBoxes = document.querySelectorAll('#ai-types-checkboxes input:checked');
+            const selectedTypes = Array.from(checkedBoxes).map(cb => cb.value);
+            const geminiKey = localStorage.getItem('gemini_api_key');
+
+            if (!geminiKey) return alert('Thiếu Gemini API Key.');
+
+            showLoader('AI đang soạn thêm câu hỏi mới...');
+            try {
+                const newQuestions = await callGeminiToGenerate(topic, level, quantity, selectedTypes, geminiKey, modelName, aiStagingQuestions);
+                if (newQuestions && newQuestions.length > 0) {
+                    aiStagingQuestions = aiStagingQuestions.concat(newQuestions);
+                    renderStagingQuestions();
+                    alert(`Đã soạn thêm ${newQuestions.length} câu hỏi mới thành công!`);
+                } else {
+                    alert('AI không trả về thêm câu hỏi.');
+                }
+            } catch (err) {
+                alert('Lỗi soạn thêm câu hỏi: ' + err.message);
+            } finally {
+                hideLoader();
+            }
+        });
+
+        // Commit button
+        document.getElementById('ai-commit-btn')?.addEventListener('click', async () => {
+            const selectEl = document.getElementById('ai-import-exam-select');
+            const examId = selectEl.value;
+            if (!examId) {
+                alert('Vui lòng chọn Đề thi mà bạn muốn nhập câu hỏi vào.');
+                return;
+            }
+
+            if (aiStagingQuestions.length === 0) {
+                alert('Không có câu hỏi nào để nhập.');
+                return;
+            }
+
+            const commitBtn = document.getElementById('ai-commit-btn');
+            commitBtn.disabled = true;
+            commitBtn.textContent = 'Đang nhập...';
+            showLoader('Đang lưu câu hỏi vào cơ sở dữ liệu...');
+
+            try {
+                // Assign exam_id, generated question_id, points, created_at to each question
+                const questionsToSave = aiStagingQuestions.map((q, idx) => {
+                    return {
+                        ...q,
+                        exam_id: examId,
+                        question_id: q.question_id || ('Q_AI_' + Date.now().toString().slice(-6) + '_' + idx),
+                        points: q.points || 1,
+                        active: q.active !== undefined ? q.active : true,
+                        created_at: getUTC7ISOString()
+                    };
+                });
+
+                await db.importQuestions(questionsToSave);
+                alert(`Đã lưu thành công ${questionsToSave.length} câu hỏi vào đề thi "${examId}"!`);
+
+                // Reset UI
+                aiStagingQuestions = [];
+                renderStagingQuestions();
+                document.getElementById('ai-preview-container').style.display = 'none';
+
+                // Reload list in main panel if the selected exam matches the active one
+                const currentSelectedExam = document.getElementById('qbm-exam-select').value;
+                if (currentSelectedExam === examId) {
+                    await loadQuestionBank();
+                }
+            } catch (err) {
+                alert('Lỗi lưu câu hỏi: ' + err.message);
+            } finally {
+                commitBtn.disabled = false;
+                commitBtn.textContent = '💾 Nhập câu hỏi vào Đề thi';
+                hideLoader();
+            }
+        });
+
+        // Populate dynamic models dropdown at initialization
+        const initialKey = localStorage.getItem('gemini_api_key');
+        if (initialKey) {
+            populateAiModels(initialKey);
+        }
+    }
+
+    async function populateAiModels(apiKey) {
+        const select = document.getElementById('ai-model-select');
+        if (!select) return;
+
+        if (!apiKey) {
+            select.innerHTML = '<option value="gemini-1.5-flash" selected>gemini-1.5-flash (Default)</option>';
+            return;
+        }
+
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`);
+            if (!response.ok) {
+                // If v1 fails, try v1beta as fallback
+                const responseBeta = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+                if (!responseBeta.ok) throw new Error('Failed to fetch models list');
+                const dataBeta = await responseBeta.json();
+                renderModelOptions(dataBeta.models);
+                return;
+            }
+            const data = await response.json();
+            renderModelOptions(data.models);
+        } catch (e) {
+            console.error('Error fetching dynamic models list:', e);
+            // Fallback to default hardcoded options
+            select.innerHTML = `
+                <option value="gemini-1.5-flash" selected>1.5 Flash (Default)</option>
+                <option value="gemini-1.5-flash-latest">1.5 Flash (Latest)</option>
+                <option value="gemini-1.5-pro">1.5 Pro</option>
+                <option value="gemini-2.0-flash-exp">2.0 Flash Exp</option>
+                <option value="gemini-2.5-flash">2.5 Flash</option>
+            `;
+        }
+
+        function renderModelOptions(models) {
+            if (!models || models.length === 0) return;
+            select.innerHTML = '';
+
+            // Filter models that support generateContent
+            const genModels = models.filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'));
+
+            if (genModels.length === 0) {
+                select.innerHTML = '<option value="gemini-1.5-flash" selected>gemini-1.5-flash (Fallback)</option>';
+                return;
+            }
+
+            genModels.forEach(m => {
+                const shortName = m.name.replace('models/', '');
+                const option = document.createElement('option');
+                option.value = shortName;
+                option.textContent = m.displayName || shortName;
+                if (shortName === 'gemini-1.5-flash') {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+
+            // If nothing is selected, select the first option
+            if (select.selectedIndex === -1) {
+                select.selectedIndex = 0;
+            }
+        }
+    }
+
+    async function callGeminiToGenerate(topic, level, quantity, selectedTypes, apiKey, modelName, existingQuestions = []) {
+        const typesExplanation = `
+Các dạng câu hỏi được phép sinh (chỉ sinh các dạng thuộc danh sách này: ${selectedTypes.join(', ')}):
+1. 'single_choice' (Trắc nghiệm 1 đáp án đúng): 
+   - option_a, option_b, option_c, option_d chứa các phương án lựa chọn (không được để trống).
+   - correct_answer: Ghi chính xác NỘI DUNG (TEXT) của phương án đúng (tuyệt đối KHÔNG ghi chữ cái A, B, C, D). Ví dụ nếu option_a là "goes", hãy ghi "goes".
+   - accepted_answers: Phải ghi mảng JSON chứa nội dung phương án đúng đó, ví dụ '["goes"]'.
+
+2. 'multiple_choice' (Trắc nghiệm nhiều đáp án đúng): 
+   - option_a, option_b, option_c, option_d chứa các phương án (không được để trống).
+   - correct_answer: Ghi chính xác NỘI DUNG (TEXT) của các phương án đúng cách nhau bởi dấu phẩy (tuyệt đối KHÔNG ghi chữ cái A, B, C, D). Ví dụ: 'goes, went'.
+   - accepted_answers: Phải là một mảng JSON chứa chính xác nội dung các phương án đúng, ví dụ '["goes", "went"]'.
+
+3. 'true_false' (Đúng/Sai): 
+   - option_a ghi "True", option_b ghi "False". option_c và option_d để trống "".
+   - correct_answer: Phải ghi "TRUE" hoặc "FALSE" (viết hoa toàn bộ).
+   - accepted_answers: Ghi mảng JSON tương ứng, ví dụ '["TRUE", "True", "true"]' hoặc '["FALSE", "False", "false"]'.
+
+4. 'fill_blank' (Điền từ vào ô trống):
+   - question_text: Phải chứa ít nhất một khoảng trống biểu diễn bằng "____" (4 dấu gạch dưới).
+   - correct_answer: Ghi từ đúng để điền vào ô trống, ví dụ "apple".
+   - accepted_answers: Phải ghi mảng JSON chứa từ đúng và các biến thể viết hoa/số nhiều được chấp nhận, ví dụ '["apple", "apples"]'.
+   - option_a, option_b, option_c, option_d để trống "".
+
+5. 'arrange_sentence' (Sắp xếp từ thành câu):
+   - question_text: Phải ghi CÂU HOÀN CHỈNH ĐÚNG (không ghi gợi ý hay dấu ngoặc vuông). Ví dụ: "She is reading a book." (Hệ thống sẽ tự động tách câu này ra thành các từ để học sinh sắp xếp).
+   - correct_answer: Phải ghi lại chính xác CÂU HOÀN CHỈNH ĐÚNG giống hệt question_text, ví dụ: "She is reading a book.".
+   - accepted_answers: Phải ghi mảng JSON chứa câu hoàn chỉnh đó, ví dụ: '["She is reading a book."]'.
+   - option_a, option_b, option_c, option_d để trống "".
+
+6. 'vocabulary' (Trắc nghiệm từ vựng):
+   - option_a, option_b, option_c, option_d chứa các phương án nghĩa hoặc từ đồng nghĩa.
+   - correct_answer: Ghi chính xác NỘI DUNG (TEXT) của phương án đúng (tuyệt đối KHÔNG ghi chữ cái A, B, C, D). Ví dụ: 'Person who teaches'.
+   - accepted_answers: Phải ghi mảng JSON chứa nội dung phương án đúng đó, ví dụ '["Person who teaches"]'.
+
+7. 'matching' (Nối cặp từ - định nghĩa):
+   - option_a, option_b, option_c, option_d chứa các cặp ghép ngăn cách bởi dấu gạch đứng "|", ví dụ: option_a: "cat | mèo", option_b: "dog | chó", option_c: "bird | chim", option_d: "fish | cá".
+   - correct_answer: Phải là một chuỗi JSON object map các từ bên trái với từ bên phải, ví dụ: '{"cat":"mèo", "dog":"chó", "bird":"chim", "fish":"cá"}'.
+   - accepted_answers: Phải ghi '[]'.
+
+8. 'short_answer' (Tự luận ngắn):
+   - question_text: Câu hỏi tự luận.
+   - correct_answer: Câu trả lời mẫu/đáp án mẫu chuẩn.
+   - accepted_answers: Phải ghi mảng JSON chứa các câu trả lời ngắn được hệ thống tự động chấm đúng, ví dụ: '["Hanoi", "Ha Noi"]', hoặc để trống '[]' nếu muốn giáo viên chấm thủ công.
+   - option_a, option_b, option_c, option_d để trống "".
+`;
+
+        let existingContext = '';
+        if (existingQuestions.length > 0) {
+            existingContext = `
+Dưới đây là các câu hỏi đã có, vui lòng KHÔNG tạo trùng lặp hoặc lặp lại nội dung của các câu hỏi này:
+${JSON.stringify(existingQuestions.map(q => q.question_text))}
+`;
+        }
+
+        const promptText = `
+Bạn là chuyên gia giáo dục tiếng Anh chuyên nghiệp. Hãy soạn ra ${quantity} câu hỏi tiếng Anh chất lượng cao.
+Chủ đề / Đoạn văn gốc: "${topic}"
+Độ khó: ${level}
+
+${typesExplanation}
+${existingContext}
+
+Hãy trả về kết quả dưới dạng một đối tượng JSON có thuộc tính duy nhất là "questions", chứa mảng các câu hỏi thỏa mãn cấu trúc trên.
+Ví dụ cấu trúc trả về:
+{
+  "questions": [
+    {
+      "type": "single_choice",
+      "level": "${level}",
+      "question_text": "...",
+      "option_a": "...",
+      "option_b": "...",
+      "option_c": "...",
+      "option_d": "...",
+      "correct_answer": "...",
+      "accepted_answers": "...",
+      "explanation": "..."
+    }
+  ]
+}
+Chỉ trả về JSON hợp lệ, không trả về thêm bất kỳ văn bản giải thích nào ngoài khối JSON.
+`;
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{ text: promptText }]
+                }]
+            })
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error?.message || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!jsonText) {
+            throw new Error('Gemini API không trả về nội dung text.');
+        }
+
+        // Helper to extract JSON from text safely
+        const extractJsonFromText = (text) => {
+            if (!text) return null;
+            let cleanText = text.trim();
+            if (cleanText.includes('```')) {
+                const match = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                if (match && match[1]) {
+                    cleanText = match[1].trim();
+                }
+            }
+            try {
+                return JSON.parse(cleanText);
+            } catch (e) {
+                const firstBrace = cleanText.indexOf('{');
+                const lastBrace = cleanText.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                    const potentialJson = cleanText.slice(firstBrace, lastBrace + 1);
+                    try {
+                        return JSON.parse(potentialJson);
+                    } catch (innerErr) {
+                        console.error('Brace extract failed:', potentialJson, innerErr);
+                    }
+                }
+                throw e;
+            }
+        };
+
+        const parsed = extractJsonFromText(jsonText);
+        if (!parsed || !parsed.questions) {
+            throw new Error('Dữ liệu JSON phản hồi không chứa thuộc tính "questions".');
+        }
+        return parsed.questions || [];
+    }
+
+    function renderStagingQuestions() {
+        const listContainer = document.getElementById('ai-staging-list');
+        const countSpan = document.getElementById('ai-staging-count');
+        if (!listContainer) return;
+
+        listContainer.innerHTML = '';
+        countSpan.textContent = aiStagingQuestions.length;
+
+        if (aiStagingQuestions.length === 0) {
+            listContainer.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 1rem;">Chưa có câu hỏi nào được soạn thảo. Hãy bấm nút Sinh câu hỏi để bắt đầu.</p>';
+            return;
+        }
+
+        aiStagingQuestions.forEach((q, index) => {
+            const card = document.createElement('div');
+            card.className = 'ai-question-edit-card';
+            card.style.cssText = `
+                background: white;
+                border: 1px solid var(--border-color);
+                border-radius: var(--radius);
+                padding: 1.25rem;
+                box-shadow: var(--shadow-sm);
+                display: flex;
+                flex-direction: column;
+                gap: 0.75rem;
+                position: relative;
+                text-align: left;
+            `;
+
+            // Badge type
+            const typeBadgeText = {
+                single_choice: 'MCQ 1 đáp án',
+                multiple_choice: 'MCQ nhiều đáp án',
+                true_false: 'Đúng/Sai',
+                fill_blank: 'Điền vào chỗ trống',
+                arrange_sentence: 'Sắp xếp câu',
+                vocabulary: 'Từ vựng',
+                matching: 'Nối cặp',
+                short_answer: 'Tự luận ngắn'
+            }[q.type] || q.type;
+
+            // Build card safely using DOM manipulation to avoid HTML injection
+            // (question content may contain quotes, angle brackets, etc.)
+
+            // Helper: create a safe labeled field
+            function makeField(labelText, fieldKey, isTextarea) {
+                const wrapper = document.createElement('div');
+                wrapper.style.cssText = 'display:flex; flex-direction:column; gap:0.25rem;';
+                const lbl = document.createElement('label');
+                lbl.style.cssText = 'font-weight: 700; font-size: 0.85rem; color: var(--text-muted);';
+                lbl.textContent = labelText;
+                wrapper.appendChild(lbl);
+                let el;
+                if (isTextarea) {
+                    el = document.createElement('textarea');
+                    el.rows = 2;
+                    el.style.cssText = 'width:100%; font-family:var(--font); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:0.4rem; box-sizing:border-box; line-height: 1.4; resize:vertical;';
+                } else {
+                    el = document.createElement('input');
+                    el.type = 'text';
+                    el.style.cssText = 'border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:0.35rem; font-family:var(--font); width:100%; box-sizing:border-box;';
+                }
+                el.className = 'ai-input-field';
+                el.dataset.field = fieldKey;
+                el.dataset.index = String(index);
+                el.value = (q[fieldKey] !== undefined && q[fieldKey] !== null) ? String(q[fieldKey]) : '';
+                wrapper.appendChild(el);
+                return wrapper;
+            }
+
+            // Header row
+            const headerDiv = document.createElement('div');
+            headerDiv.style.cssText = 'display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f3f4f6; padding-bottom:0.5rem; margin-bottom:0.25rem;';
+            const titleSpan = document.createElement('span');
+            titleSpan.style.cssText = 'font-weight: 800; color: var(--primary); font-size:0.95rem;';
+            titleSpan.textContent = `Câu hỏi #${index + 1} `;
+            const badge = document.createElement('span');
+            badge.style.cssText = 'font-weight: 600; font-size:0.8rem; background: var(--primary-light); color: var(--primary); padding: 0.15rem 0.5rem; border-radius: 9999px; margin-left: 0.5rem;';
+            badge.textContent = typeBadgeText;
+            titleSpan.appendChild(badge);
+            headerDiv.appendChild(titleSpan);
+            const delBtn = document.createElement('button');
+            delBtn.className = 'ai-delete-card-btn';
+            delBtn.dataset.index = String(index);
+            delBtn.style.cssText = 'background:none; border:none; color:var(--accent); font-size:1.1rem; cursor:pointer; font-weight:bold; display:flex; align-items:center; gap:0.25rem;';
+            delBtn.textContent = '\u{1F5D1}\uFE0F X\u00F3a';
+            headerDiv.appendChild(delBtn);
+            card.appendChild(headerDiv);
+
+            // Question text (textarea)
+            card.appendChild(makeField('V\u0103n b\u1EA3n c\u00E2u h\u1ECFi:', 'question_text', true));
+
+            // Options A-D for choice/vocabulary types
+            if (['single_choice', 'multiple_choice', 'vocabulary'].includes(q.type)) {
+                const grid = document.createElement('div');
+                grid.style.cssText = 'display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;';
+                ['a', 'b', 'c', 'd'].forEach(letter => {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex; align-items:center; gap:0.5rem;';
+                    const lbl = document.createElement('strong');
+                    lbl.style.cssText = 'font-size:0.9rem; white-space:nowrap;';
+                    lbl.textContent = letter.toUpperCase() + ':';
+                    row.appendChild(lbl);
+                    const inp = document.createElement('input');
+                    inp.type = 'text';
+                    inp.className = 'ai-input-field';
+                    inp.dataset.field = `option_${letter}`;
+                    inp.dataset.index = String(index);
+                    inp.style.cssText = 'flex:1; border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:0.35rem; font-family:var(--font);';
+                    const v = q[`option_${letter}`];
+                    inp.value = (v !== undefined && v !== null) ? String(v) : '';
+                    row.appendChild(inp);
+                    grid.appendChild(row);
+                });
+                card.appendChild(grid);
+            }
+
+            // Matching pairs
+            if (q.type === 'matching') {
+                const grid = document.createElement('div');
+                grid.style.cssText = 'display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;';
+                const pairLabels = ['C\u1EB7p 1:', 'C\u1EB7p 2:', 'C\u1EB7p 3:', 'C\u1EB7p 4:'];
+                const pairPlaceholders = ['cat | m\u00E8o', 'dog | ch\u00F3', 'bird | chim', 'fish | c\u00E1'];
+                ['a', 'b', 'c', 'd'].forEach((letter, i) => {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex; align-items:center; gap:0.5rem;';
+                    const lbl = document.createElement('strong');
+                    lbl.style.cssText = 'font-size:0.9rem; white-space:nowrap;';
+                    lbl.textContent = pairLabels[i];
+                    row.appendChild(lbl);
+                    const inp = document.createElement('input');
+                    inp.type = 'text';
+                    inp.className = 'ai-input-field';
+                    inp.dataset.field = `option_${letter}`;
+                    inp.dataset.index = String(index);
+                    inp.placeholder = pairPlaceholders[i];
+                    inp.style.cssText = 'flex:1; border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:0.35rem; font-family:var(--font);';
+                    const v = q[`option_${letter}`];
+                    inp.value = (v !== undefined && v !== null) ? String(v) : '';
+                    row.appendChild(inp);
+                    grid.appendChild(row);
+                });
+                card.appendChild(grid);
+            }
+
+            // Correct answer + accepted answers (2-col)
+            const ansGrid = document.createElement('div');
+            ansGrid.style.cssText = 'display:grid; grid-template-columns: 1fr 1fr; gap:1rem;';
+            ansGrid.appendChild(makeField('\u0110\u00E1p \u00E1n \u0111\u00FAng (Correct Answer):', 'correct_answer', false));
+            const acceptedWrapper = makeField('\u0110\u00E1p \u00E1n ph\u1EE5 (Accepted Answers JSON):', 'accepted_answers', false);
+            const acceptedInp = acceptedWrapper.querySelector('input');
+            if (!acceptedInp.value) acceptedInp.value = '[]';
+            ansGrid.appendChild(acceptedWrapper);
+            card.appendChild(ansGrid);
+
+            // Explanation
+            card.appendChild(makeField('Gi\u1EA3i th\u00EDch \u0111\u00E1p \u00E1n:', 'explanation', false));
+
+            listContainer.appendChild(card);
+        });
+
+        // Attach delete click listeners
+        listContainer.querySelectorAll('.ai-delete-card-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.currentTarget.dataset.index);
+                aiStagingQuestions.splice(idx, 1);
+                renderStagingQuestions();
+                if (aiStagingQuestions.length === 0) {
+                    document.getElementById('ai-preview-container').style.display = 'none';
+                }
+            });
+        });
+
+        // Attach input/change event listeners to auto-update aiStagingQuestions array
+        listContainer.querySelectorAll('.ai-input-field').forEach(input => {
+            const updateField = (e) => {
+                const idx = parseInt(e.target.dataset.index);
+                const field = e.target.dataset.field;
+                const value = e.target.value;
+                if (aiStagingQuestions[idx]) {
+                    aiStagingQuestions[idx][field] = value;
+                }
+            };
+            input.addEventListener('input', updateField);
+            input.addEventListener('change', updateField);
+        });
+    }
 
     // Expose utilities for automated testing
     window.EnglishExamUtils = {

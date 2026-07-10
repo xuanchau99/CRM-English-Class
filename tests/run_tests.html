@@ -450,9 +450,17 @@
                     <span class="test-status-badge badge-idle">Idle</span>
                 </div>
 
+                <div id="suite-ai" class="test-card">
+                    <div class="test-info">
+                        <span class="test-title">5. AI Question Generator</span>
+                        <span class="test-desc">Generates and inserts AI questions.</span>
+                    </div>
+                    <span class="test-status-badge badge-idle">Idle</span>
+                </div>
+
                 <div id="suite-student" class="test-card">
                     <div class="test-info">
-                        <span class="test-title">5. Student Examination Flow</span>
+                        <span class="test-title">6. Student Examination Flow</span>
                         <span class="test-desc">Simulates a student taking the exam.</span>
                     </div>
                     <span class="test-status-badge badge-idle">Idle</span>
@@ -460,7 +468,7 @@
 
                 <div id="suite-submission" class="test-card">
                     <div class="test-info">
-                        <span class="test-title">6. Verify Scores Dashboard</span>
+                        <span class="test-title">7. Verify Scores Dashboard</span>
                         <span class="test-desc">Confirms score outputs in admin list.</span>
                     </div>
                     <span class="test-status-badge badge-idle">Idle</span>
@@ -468,7 +476,7 @@
 
                 <div id="suite-delete" class="test-card">
                     <div class="test-info">
-                        <span class="test-title">7. Soft-Delete Verifications</span>
+                        <span class="test-title">8. Soft-Delete Verifications</span>
                         <span class="test-desc">Tests item hide & is_deleted values.</span>
                     </div>
                     <span class="test-status-badge badge-idle">Idle</span>
@@ -639,7 +647,7 @@
             clearLogs();
             updateProgress(0);
 
-            const suites = ['login', 'exam', 'question', 'stress', 'student', 'submission', 'delete'];
+            const suites = ['login', 'exam', 'question', 'ai', 'stress', 'student', 'submission', 'delete'];
             suites.forEach(s => setSuiteStatus(s, 'idle'));
 
             log('--- Launching E2E Automation Test Suite ---', 'info');
@@ -678,31 +686,97 @@
                 getWin().alert = function(msg) { console.log('[IFRAME ALERT]', msg); };
                 getWin().confirm = function(msg) { console.log('[IFRAME CONFIRM]', msg); return true; };
 
+                // Override fetch for Gemini API calls to return mock generated questions
+                const originalFetch = getWin().fetch;
+                getWin().fetch = async function(url, options) {
+                    if (typeof url === 'string' && url.includes('generativelanguage.googleapis.com') && url.includes(':generateContent')) {
+                        console.log('[MOCK FETCH] Intercepted Gemini generateContent request');
+                        return {
+                            ok: true,
+                            json: async () => {
+                                return {
+                                    candidates: [{
+                                        content: {
+                                            parts: [{
+                                                text: JSON.stringify({
+                                                    questions: [
+                                                        {
+                                                            type: "single_choice",
+                                                            level: "medium",
+                                                            question_text: "What is the capital of France?",
+                                                            option_a: "Paris",
+                                                            option_b: "London",
+                                                            option_c: "Berlin",
+                                                            option_d: "Rome",
+                                                            correct_answer: "A",
+                                                            accepted_answers: JSON.stringify(["A"]),
+                                                            explanation: "Paris is the capital."
+                                                        },
+                                                        {
+                                                            type: "arrange_sentence",
+                                                            level: "medium",
+                                                            question_text: "She is playing the piano.",
+                                                            option_a: "",
+                                                            option_b: "",
+                                                            option_c: "",
+                                                            option_d: "",
+                                                            correct_answer: "She is playing the piano.",
+                                                            accepted_answers: JSON.stringify(["She is playing the piano."]),
+                                                            explanation: "Standard word order."
+                                                        },
+                                                        {
+                                                            type: "multiple_choice",
+                                                            level: "medium",
+                                                            question_text: "Which of the following are programming languages?",
+                                                            option_a: "Python",
+                                                            option_b: "HTML",
+                                                            option_c: "Java",
+                                                            option_d: "CSS",
+                                                            correct_answer: "A, C",
+                                                            accepted_answers: JSON.stringify(["A", "C"]),
+                                                            explanation: "Python and Java are programming languages."
+                                                        }
+                                                    ]
+                                                })
+                                            }]
+                                        }
+                                    }]
+                                };
+                            }
+                        };
+                    }
+                    return originalFetch.apply(this, arguments);
+                };
+
                 // 1. ADMIN LOGIN TEST
                 await runSuiteLogin();
-                updateProgress(14);
+                updateProgress(12);
 
                 // 2. EXAM CREATION TEST
                 await runSuiteExam();
-                updateProgress(28);
+                updateProgress(25);
 
                 // 3. QUESTION CREATION TEST
                 await runSuiteQuestion();
-                updateProgress(42);
+                updateProgress(38);
 
-                // 4. STRESS TEST — ALL BUTTON SPAM PROTECTION
+                // 4. AI QUESTION GENERATION TEST
+                await runSuiteAiGenerator();
+                updateProgress(50);
+
+                // 5. STRESS TEST — ALL BUTTON SPAM PROTECTION
                 await runSuiteStress();
-                updateProgress(57);
+                updateProgress(63);
 
-                // 5. STUDENT EXAMINATION FLOW
+                // 6. STUDENT EXAMINATION FLOW
                 await runSuiteStudent();
-                updateProgress(71);
+                updateProgress(75);
 
-                // 6. VERIFY SCORES DASHBOARD
+                // 7. VERIFY SCORES DASHBOARD
                 await runSuiteSubmission();
-                updateProgress(85);
+                updateProgress(88);
 
-                // 7. SOFT-DELETE VERIFICATION
+                // 8. SOFT-DELETE VERIFICATION
                 await runSuiteDelete();
                 updateProgress(100);
 
@@ -1342,6 +1416,123 @@
                 testStats.failed++;
                 document.getElementById('metric-failed').textContent = testStats.failed;
                 throw new Error(`Submission Dashboard Suite Failed: ${e.message}`);
+            }
+        }
+
+        async function runSuiteAiGenerator() {
+            const id = 'ai';
+            setSuiteStatus(id, 'running');
+            log('Starting AI Question Generator Test Suite...', 'info');
+            try {
+                const doc = getDoc();
+                const iframeWin = getWin();
+
+                // Switch to Question Manager tab
+                log('Switching to Question Manager tab...', 'info');
+                const tabQuestionsBtn = doc.getElementById('tab-questions-btn');
+                if (!tabQuestionsBtn) throw new Error('Question Manager tab button not found');
+                tabQuestionsBtn.click();
+                await wait(500);
+
+                // Set local storage Gemini key
+                log('Setting mock Gemini API Key in localStorage...', 'info');
+                iframeWin.localStorage.setItem('gemini_api_key', 'test_key');
+
+                // Reload dynamic models listing (will use our mock fetch interceptor)
+                log('Triggering dynamic models dropdown populate...', 'info');
+                await iframeWin.populateAiModels('test_key');
+                await wait(500);
+
+                // Fill topic prompt
+                const topicTextarea = doc.getElementById('ai-prompt-topic');
+                if (!topicTextarea) throw new Error('AI prompt topic field not found');
+                topicTextarea.value = 'Prepositions of place';
+                topicTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+                // Check Arrange sentence and Multiple choice
+                const arrangeCheckbox = doc.getElementById('ait-arrange');
+                if (arrangeCheckbox) {
+                    arrangeCheckbox.checked = true;
+                    arrangeCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                const multiCheckbox = doc.getElementById('ait-multi');
+                if (multiCheckbox) {
+                    multiCheckbox.checked = true;
+                    multiCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+
+                // Click "Sinh câu hỏi bằng AI" button
+                log('Clicking "Sinh câu hỏi bằng AI" (ai-generate-btn)...', 'info');
+                const genBtn = doc.getElementById('ai-generate-btn');
+                if (!genBtn) throw new Error('AI generate button not found');
+                genBtn.click();
+
+                // Wait for generation to complete (handled by mock fetch)
+                log('Waiting for AI Question Generator to display preview list...', 'info');
+                await waitForElement('#ai-preview-container');
+                await wait(1000);
+
+                // Verify staging count
+                const stagingCountEl = doc.getElementById('ai-staging-count');
+                log(`AI Generator completed! Staging count shows: ${stagingCountEl ? stagingCountEl.textContent : 'unknown'}`, 'info');
+                if (!stagingCountEl || stagingCountEl.textContent !== '3') {
+                    throw new Error('Expected 3 staging questions generated.');
+                }
+
+                // Verify formatting of Sắp xếp câu (Arrange sentence)
+                log('Verifying arrange_sentence format conforms to rules (full sentence correct_answer, empty options)...', 'info');
+                const stagingList = doc.getElementById('ai-staging-list');
+                const cards = stagingList.querySelectorAll('.ai-question-edit-card');
+
+                // Since we returned a specific list in mock, let's verify item at index 1 is arrange_sentence
+                const arrangeCard = cards[1];
+                const arrangeTextarea = arrangeCard.querySelector('textarea[data-field="question_text"]');
+                const arrangeCorrectVal = arrangeCard.querySelector('input[data-field="correct_answer"]').value;
+                const arrangeOptA = arrangeCard.querySelector('input[data-field="option_a"]'); // shouldn't exist or should be empty/hidden
+                
+                log(`Arrange sentence question text: "${arrangeTextarea.value}"`, 'info');
+                log(`Arrange sentence correct answer: "${arrangeCorrectVal}"`, 'info');
+                
+                if (arrangeTextarea.value !== "She is playing the piano.") {
+                    throw new Error(`Expected arrange sentence question text to be "She is playing the piano.", got "${arrangeTextarea.value}"`);
+                }
+                if (arrangeCorrectVal !== "She is playing the piano.") {
+                    throw new Error(`Expected arrange sentence correct answer to be complete sentence, got "${arrangeCorrectVal}"`);
+                }
+                if (arrangeOptA) {
+                    throw new Error('Arrange sentence question type should not display or render option inputs A, B, C, D.');
+                }
+
+                // Select target exam in import dropdown
+                log(`Selecting target exam: ${activeExamId}...`, 'info');
+                const importSelect = doc.getElementById('ai-import-exam-select');
+                if (!importSelect) throw new Error('ai-import-exam-select not found');
+                importSelect.value = activeExamId;
+                importSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                await wait(2000); // Wait for clone and options populate to finish
+
+                // Click "Nhập câu hỏi vào Đề thi"
+                log('Importing AI questions into exam database...', 'info');
+                const commitBtn = doc.getElementById('ai-commit-btn');
+                if (!commitBtn) throw new Error('ai-commit-btn not found');
+                commitBtn.click();
+
+                // Wait for preview container to hide
+                await wait(1000);
+                const previewContainer = doc.getElementById('ai-preview-container');
+                if (previewContainer && previewContainer.style.display !== 'none') {
+                    throw new Error('Expected AI preview container to be hidden after successful import.');
+                }
+
+                log('Import successful! Verification completed.', 'success');
+                setSuiteStatus(id, 'passed');
+                testStats.passed++;
+                document.getElementById('metric-passed').textContent = testStats.passed;
+            } catch (e) {
+                setSuiteStatus(id, 'failed');
+                testStats.failed++;
+                document.getElementById('metric-failed').textContent = testStats.failed;
+                throw new Error(`AI Generator Suite Failed: ${e.message}`);
             }
         }
 
