@@ -609,7 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-
+    window.db = db;
 
     /**
      * UI Mode Loading
@@ -1672,9 +1672,19 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         `;
         document.body.appendChild(modal);
 
+        let isSavingExam = false;
         const form = document.getElementById('exam-form');
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isSavingExam) return;
+            isSavingExam = true;
+
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.style.opacity = '0.5';
+            }
+
             const fd = new FormData(form);
             const data = {};
             fd.forEach((val, key) => {
@@ -1701,6 +1711,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             } catch (err) {
                 alert('Operation failed: ' + err.message);
             } finally {
+                isSavingExam = false;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.style.opacity = '';
+                }
                 hideLoader();
             }
         });
@@ -2734,8 +2749,15 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         typeSelect.addEventListener('change', () => applyAll(typeSelect.value));
         applyAll(currentType);
 
+        let isSavingQuestion = false;
         document.getElementById('edit-question-form').addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isSavingQuestion) return;
+            isSavingQuestion = true;
+
+            const qSubmitBtn = e.target.querySelector('button[type="submit"]');
+            if (qSubmitBtn) { qSubmitBtn.disabled = true; qSubmitBtn.style.opacity = '0.5'; }
+
             const formEl = e.target;
             const fd = new FormData(formEl);
             const data = {};
@@ -2764,6 +2786,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             } catch (err) {
                 alert('Operation failed: ' + err.message);
             } finally {
+                isSavingQuestion = false;
+                if (qSubmitBtn) { qSubmitBtn.disabled = false; qSubmitBtn.style.opacity = ''; }
                 hideLoader();
             }
         });
@@ -2819,11 +2843,18 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         XLSX.writeFile(workbook, `Questions_${examId}.xlsx`);
     }
 
-    /**
-     * Student Mode - Taking Exam
-     */
+    let isStartingExam = false;
     async function handleStartExam(event) {
         event.preventDefault();
+        if (isStartingExam) return;
+        isStartingExam = true;
+
+        const startBtn = document.getElementById('student-start-form')?.querySelector('button[type="submit"]');
+        if (startBtn) {
+            startBtn.disabled = true;
+            startBtn.textContent = 'Loading exam...';
+        }
+
         const studentName = document.getElementById('student_name').value.trim();
         const className = document.getElementById('class_name').value.trim();
         const examSelect = document.getElementById('exam-select');
@@ -2831,6 +2862,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         
         if (!studentName || !className || !examId) {
             alert('Please fill in all fields.');
+            isStartingExam = false;
+            if (startBtn) {
+                startBtn.disabled = false;
+                startBtn.textContent = '👉 Vào Phòng Thi';
+            }
             return;
         }
 
@@ -2847,6 +2883,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             );
             if (alreadyDone) {
                 alert(`⚠️ Bạn (${studentName} - ${className}) đã làm bài kiểm tra này rồi.\nMỗi học sinh chỉ được làm bài 1 lần.\nVui lòng liên hệ giáo viên nếu cần làm lại.`);
+                isStartingExam = false;
+                if (startBtn) {
+                    startBtn.disabled = false;
+                    startBtn.textContent = '👉 Vào Phòng Thi';
+                }
                 return;
             }
         } catch (e) {
@@ -2856,22 +2897,32 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
         let rawQuestions = [];
         try {
-            document.getElementById('student-start-form').querySelector('button').disabled = true;
-            document.getElementById('student-start-form').querySelector('button').textContent = 'Loading exam questions...';
+            if (startBtn) {
+                startBtn.textContent = 'Loading exam questions...';
+            }
             rawQuestions = await db.getQuestions(examId);
         } catch (e) {
             alert('Failed to load questions: ' + e.message);
-            document.getElementById('student-start-form').querySelector('button').disabled = false;
-            document.getElementById('student-start-form').querySelector('button').textContent = 'Start Exam';
+            isStartingExam = false;
+            if (startBtn) {
+                startBtn.disabled = false;
+                startBtn.textContent = '👉 Vào Phòng Thi';
+            }
             return;
         }
 
         if (rawQuestions.length === 0) {
             alert('This exam has no active questions.');
-            document.getElementById('student-start-form').querySelector('button').disabled = false;
-            document.getElementById('student-start-form').querySelector('button').textContent = 'Start Exam';
+            isStartingExam = false;
+            if (startBtn) {
+                startBtn.disabled = false;
+                startBtn.textContent = '👉 Vào Phòng Thi';
+            }
             return;
         }
+
+        // Reset starting state on successful proceed
+        isStartingExam = false;
 
         // Format raw spreadsheet objects to client questions and filter only active ones
         let clientQuestions = rawQuestions.map(formatQuestionForClient).filter(q => q.active === true);
@@ -3509,7 +3560,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         `;
         document.body.appendChild(modal);
 
+        // Guard against duplicate submission (detached DOM elements bypass global spamLock)
+        let alreadySubmitted = false;
         document.getElementById('confirm-submit-yes').onclick = () => {
+            if (alreadySubmitted) return;
+            alreadySubmitted = true;
             closeSubmitConfirmModal();
             performActualSubmission();
         };

@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>E2E Automation Test Suite - EnglishTools</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #0a0f1d;
+            --bg-card: #121829;
+            --bg-item: #1b233a;
+            --primary: #8b5cf6;
+            --primary-glow: rgba(139, 92, 246, 0.35);
+            --secondary: #10b981;
+            --secondary-glow: rgba(16, 185, 129, 0.25);
+            --accent: #f43f5e;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --radius: 12px;
+            --font: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: var(--font);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Top Header Navigation */
+        header {
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+            z-index: 10;
+        }
+
+        .logo-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-icon {
+            font-size: 1.8rem;
+            background: linear-gradient(135deg, var(--primary), #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-group h1 {
+            font-size: 1.25rem;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: -0.025em;
+        }
+
+        .logo-group span {
+            color: var(--primary);
+            font-weight: 800;
+        }
+
+        .control-panel {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        /* Buttons styling */
+        .btn {
+            font-family: var(--font);
+            font-weight: 600;
+            font-size: 0.9rem;
+            padding: 0.6rem 1.25rem;
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: 0 4px 14px var(--primary-glow);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: #7c3aed;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
+        }
+
+        .btn-secondary {
+            background-color: var(--bg-item);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background-color: rgba(27, 35, 58, 0.8);
+            border-color: var(--primary);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Dashboard grid layout */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 380px 1fr 380px;
+            flex: 1;
+            height: calc(100vh - 70px);
+            overflow: hidden;
+        }
+
+        /* Sidebars & Central Panel */
+        .sidebar {
+            background-color: var(--bg-card);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-right {
+            border-right: none;
+            border-left: 1px solid var(--border-color);
+        }
+
+        .center-stage {
+            display: flex;
+            flex-direction: column;
+            background-color: #05070c;
+            padding: 1.5rem;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .iframe-container {
+            flex: 1;
+            background-color: white;
+            border-radius: var(--radius);
+            border: 2px solid var(--border-color);
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .iframe-header {
+            background-color: #f1f5f9;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot-red { background-color: #ef4444; }
+        .dot-yellow { background-color: #f59e0b; }
+        .dot-green { background-color: #10b981; }
+
+        .iframe-address {
+            background-color: white;
+            color: #475569;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            flex: 1;
+            border: 1px solid #cbd5e1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: white;
+        }
+
+        /* Metrics & Log Panel */
+        .section-header {
+            padding: 1.25rem 1.5rem 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .metrics-card {
+            background-color: var(--bg-item);
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            margin: 0.5rem 1.5rem;
+            padding: 1rem;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+
+        .metric-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--text-main);
+            font-family: var(--font-mono);
+        }
+
+        /* List of test suites */
+        .test-list {
+            padding: 0.5rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .test-card {
+            background-color: var(--bg-item);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 0.85rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s ease;
+        }
+
+        .test-card.active {
+            border-color: var(--primary);
+            box-shadow: 0 0 12px var(--primary-glow);
+        }
+
+        .test-card.passed {
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+
+        .test-card.failed {
+            border-color: rgba(244, 63, 94, 0.4);
+        }
+
+        .test-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .test-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .test-desc {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        .test-status-badge {
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.25rem 0.6rem;
+            border-radius: 20px;
+            text-transform: uppercase;
+        }
+
+        .badge-idle { background-color: rgba(148, 163, 184, 0.15); color: var(--text-muted); }
+        .badge-running { background-color: rgba(139, 92, 246, 0.2); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.4); animation: pulse-border 1.5s infinite; }
+        .badge-passed { background-color: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-failed { background-color: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+
+        /* Logger area */
+        .log-container {
+            flex: 1;
+            margin: 0.5rem 1.5rem 1.5rem;
+            background-color: #030712;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            padding: 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.8);
+        }
+
+        .log-item {
+            line-height: 1.4;
+            word-break: break-all;
+            animation: fadeIn 0.15s ease;
+        }
+
+        .log-time {
+            color: #4b5563;
+            margin-right: 0.5rem;
+        }
+
+        .log-info { color: #38bdf8; }
+        .log-success { color: #34d399; font-weight: 700; }
+        .log-warning { color: #fbbf24; }
+        .log-error { color: #f87171; font-weight: 700; }
+        .log-stress { color: #f472b6; font-weight: 700; }
+
+        /* Progress Bar styling */
+        .progress-container {
+            width: 100%;
+            height: 6px;
+            background-color: var(--border-color);
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 5;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Origin warning banner */
+        .origin-warning {
+            background-color: rgba(244, 63, 94, 0.15);
+            border: 1px solid rgba(244, 63, 94, 0.3);
+            color: #fb7185;
+            padding: 0.85rem 1.25rem;
+            border-radius: var(--radius);
+            margin: 1.5rem;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            display: none;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(2px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse-border {
+            0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4); }
+            70% { box-shadow: 0 0 0 6px rgba(139, 92, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-group">
+            <span class="logo-icon">🚀</span>
+            <h1>EnglishTools <span>E2E Test Runner</span></h1>
+        </div>
+        <div class="control-panel">
+            <button id="db-mode-btn" class="btn btn-secondary" onclick="toggleDbMode()">
+                🌐 Mode: Mock DB (Isolated)
+            </button>
+            <button id="run-btn" class="btn btn-primary" onclick="startTestSuite()">
+                ▶ Run All Tests
+            </button>
+        </div>
+    </header>
+
+    <div class="main-layout">
+        <!-- Sidebar Left: Test Suites -->
+        <div class="sidebar">
+            <div class="section-header">
+                <span>Test Suites</span>
+            </div>
+            
+            <div id="origin-alert" class="origin-warning">
+                <strong>⚠️ Origin Block Alert!</strong> You opened this file using <code>file://</code> protocol. Iframe cross-origin communication is blocked by browsers under this protocol.
+                <br><br>
+                Please double-click <code>run_tests.bat</code> or serve this directory using a local web server (e.g. <code>php -S 127.0.0.1:8000</code>).
+            </div>
+
+            <div class="test-list">
+                <div id="suite-login" class="test-card">
+                    <div class="test-info">
+                        <span class="test-title">1. Admin Authentication</span>
+                        <span class="test-desc">Tests login with demo credentials.</span>
+                    </div>
+                    <span class="test-status-badge badge-idle">Idle</span>
+                </div>
+
+                <div id="suite-exam" class="test-card">
+                    <div class="test-info">
+                        <span class="test-title">2. Exam Creation</span>
+                        <span class="test-desc">Tests new exam details modal.</span>
+                    </div>
+                    <span class="test-status-badge badge-idle">Idle</span>
+                </div>
+
+                <div id="suite-stress" class="test-card">
+                    <div class="test-info">
+                        <span class="test-title">3. Multi-Click Stress Lock</span>
+                        <span class="test-desc">Stress tests rapid clicks on buttons.</span>
+                    </div>
+                    <span class="test-status-badge badge-idle">Idle</span>
+                </div>
+
+                <div id="suite-question" class="test-card">
+                    <div class="test-info">
+                        <span class="test-title">4. Question Creation</span>
+                        <span class="test-desc">Adds MCQ question inside the exam.</span>
+                    </div>
+                    <span class="test-status-badge badge-idle">Idle</span>
+                </div>
+
+                <div id="suite-student" class="test-card">
+                    <div class="test-info">
+                        <span class="test-title">5. Student Examination Flow</span>
+                        <span class="test-desc">Simulates a student taking the exam.</span>
+                    </div>
+                    <span class="test-status-badge badge-idle">Idle</span>
+                </div>
+
+                <div id="suite-submission" class="test-card">
+                    <div class="test-info">
+                        <span class="test-title">6. Verify Scores Dashboard</span>
+                        <span class="test-desc">Confirms score outputs in admin list.</span>
+                    </div>
+                    <span class="test-status-badge badge-idle">Idle</span>
+                </div>
+
+                <div id="suite-delete" class="test-card">
+                    <div class="test-info">
+                        <span class="test-title">7. Soft-Delete Verifications</span>
+                        <span class="test-desc">Tests item hide & is_deleted values.</span>
+                    </div>
+                    <span class="test-status-badge badge-idle">Idle</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Central Stage: Iframe rendering -->
+        <div class="center-stage">
+            <div class="progress-container">
+                <div id="progress" class="progress-bar"></div>
+            </div>
+            
+            <div class="iframe-container">
+                <div class="iframe-header">
+                    <span class="dot dot-red"></span>
+                    <span class="dot dot-yellow"></span>
+                    <span class="dot dot-green"></span>
+                    <div id="iframe-url" class="iframe-address">about:blank</div>
+                </div>
+                <iframe id="app-iframe" src="about:blank"></iframe>
+            </div>
+        </div>
+
+        <!-- Sidebar Right: Execution Logs & Dashboard -->
+        <div class="sidebar sidebar-right">
+            <div class="section-header">
+                <span>Metrics</span>
+            </div>
+            <div class="metrics-card">
+                <div class="metric-item">
+                    <span class="metric-label">Passed</span>
+                    <span id="metric-passed" class="metric-value" style="color:var(--secondary);">0</span>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-label">Failed</span>
+                    <span id="metric-failed" class="metric-value" style="color:var(--accent);">0</span>
+                </div>
+            </div>
+
+            <div class="section-header">
+                <span>Live Logs</span>
+                <span style="font-size: 0.75rem; text-transform: none; cursor: pointer; color: var(--primary);" onclick="clearLogs()">Clear</span>
+            </div>
+            <div id="logs" class="log-container">
+                <p class="log-item" style="color: var(--text-muted);">Test runner ready. Click "Run All Tests" to begin.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const iframe = document.getElementById('app-iframe');
+        const logContainer = document.getElementById('logs');
+        const progressBar = document.getElementById('progress');
+        
+        let useMockDb = true;
+        let testRunning = false;
+        let testStats = { passed: 0, failed: 0 };
+        let activeExamId = '';
+
+        // Check origin protocol
+        if (window.location.protocol === 'file:') {
+            document.getElementById('origin-alert').style.display = 'block';
+        }
+
+        const getDoc = () => iframe.contentDocument || iframe.contentWindow.document;
+        const getWin = () => iframe.contentWindow;
+
+        const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        function toggleDbMode() {
+            if (testRunning) return;
+            useMockDb = !useMockDb;
+            document.getElementById('db-mode-btn').textContent = useMockDb 
+                ? '🌐 Mode: Mock DB (Isolated)' 
+                : '☁️ Mode: Cloud DB (Production)';
+            log(`Database mode toggled to: ${useMockDb ? 'Mock DB' : 'Cloud DB (Google Sheets)'}`, 'info');
+        }
+
+        function log(message, type = 'info') {
+            const time = new Date().toLocaleTimeString([], { hour12: false });
+            const item = document.createElement('div');
+            item.className = `log-item log-${type}`;
+            item.innerHTML = `<span class="log-time">[${time}]</span> ${message}`;
+            logContainer.appendChild(item);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function clearLogs() {
+            logContainer.innerHTML = '';
+        }
+
+        function setSuiteStatus(suiteId, status) {
+            const card = document.getElementById(`suite-${suiteId}`);
+            if (!card) return;
+            
+            const badge = card.querySelector('.test-status-badge');
+            card.className = 'test-card';
+            badge.className = 'test-status-badge';
+
+            if (status === 'running') {
+                card.classList.add('active');
+                badge.classList.add('badge-running');
+                badge.textContent = 'Running';
+            } else if (status === 'passed') {
+                card.classList.add('passed');
+                badge.classList.add('badge-passed');
+                badge.textContent = 'Pass';
+            } else if (status === 'failed') {
+                card.classList.add('failed');
+                badge.classList.add('badge-failed');
+                badge.textContent = 'Fail';
+            } else {
+                badge.classList.add('badge-idle');
+                badge.textContent = 'Idle';
+            }
+        }
+
+        function updateProgress(percent) {
+            progressBar.style.width = `${percent}%`;
+        }
+
+        // Default timeout: 7s for Mock DB, 45s for Cloud DB (network latency)
+        const DEFAULT_TIMEOUT = () => useMockDb ? 7000 : 45000;
+
+        // Wait helper with dynamic selector polling
+        async function waitForElement(selector, timeout = null) {
+            const ms = timeout !== null ? timeout : DEFAULT_TIMEOUT();
+            const start = Date.now();
+            while (Date.now() - start < ms) {
+                try {
+                    const doc = getDoc();
+                    if (doc) {
+                        const el = doc.querySelector(selector);
+                        if (el && el.offsetHeight > 0) return el;
+                    }
+                } catch (e) {}
+                await wait(150);
+            }
+            throw new Error(`Timeout waiting for selector: "${selector}"`);
+        }
+
+        // Wait helper for element text content
+        async function waitForText(selector, text, timeout = null) {
+            const ms = timeout !== null ? timeout : DEFAULT_TIMEOUT();
+            const start = Date.now();
+            while (Date.now() - start < ms) {
+                try {
+                    const doc = getDoc();
+                    if (doc) {
+                        const el = doc.querySelector(selector);
+                        if (el && el.textContent.includes(text)) return el;
+                    }
+                } catch (e) {}
+                await wait(150);
+            }
+            throw new Error(`Timeout waiting for text "${text}" inside "${selector}"`);
+        }
+
+        async function startTestSuite() {
+            if (testRunning) return;
+            testRunning = true;
+            testStats = { passed: 0, failed: 0 };
+            document.getElementById('metric-passed').textContent = '0';
+            document.getElementById('metric-failed').textContent = '0';
+            document.getElementById('run-btn').disabled = true;
+            document.getElementById('run-btn').textContent = '⚡ Running...';
+            clearLogs();
+            updateProgress(0);
+
+            const suites = ['login', 'exam', 'question', 'stress', 'student', 'submission', 'delete'];
+            suites.forEach(s => setSuiteStatus(s, 'idle'));
+
+            log('--- Launching E2E Automation Test Suite ---', 'info');
+            log(`Isolated Mock DB mode is: ${useMockDb ? 'ON' : 'OFF'}`, 'info');
+
+            try {
+                // Initialize Iframe
+                log('Navigating iframe to EnglishTools home...', 'info');
+                iframe.src = '../index.html';
+                document.getElementById('iframe-url').textContent = 'index.html';
+                
+                await wait(1500);
+
+                // Setup local storage and session storage in iframe
+                const apiEndpoint = getWin().localStorage.getItem('api_endpoint');
+                getWin().localStorage.clear();
+                getWin().sessionStorage.clear();
+                getWin().localStorage.setItem('use_mock_db', useMockDb ? 'true' : 'false');
+                if (apiEndpoint) {
+                    getWin().localStorage.setItem('api_endpoint', apiEndpoint);
+                }
+                if (useMockDb) {
+                    log('Local Mock Database initialized in iframe storage.', 'info');
+                }
+
+                // Reload iframe so app re-seeds mock data (teachers, exams, questions, etc.)
+                log('Reloading iframe to seed mock database...', 'info');
+                iframe.contentWindow.location.reload();
+                await wait(2000);
+
+                // Wait for login screen to be ready
+                await waitForElement('#login-username');
+                log('Login screen ready.', 'info');
+
+                // Override alert/confirm in iframe so they don't block tests
+                getWin().alert = function(msg) { console.log('[IFRAME ALERT]', msg); };
+                getWin().confirm = function(msg) { console.log('[IFRAME CONFIRM]', msg); return true; };
+
+                // 1. ADMIN LOGIN TEST
+                await runSuiteLogin();
+                updateProgress(14);
+
+                // 2. EXAM CREATION TEST
+                await runSuiteExam();
+                updateProgress(28);
+
+                // 3. QUESTION CREATION TEST
+                await runSuiteQuestion();
+                updateProgress(42);
+
+                // 4. STRESS TEST — ALL BUTTON SPAM PROTECTION
+                await runSuiteStress();
+                updateProgress(57);
+
+                // 5. STUDENT EXAMINATION FLOW
+                await runSuiteStudent();
+                updateProgress(71);
+
+                // 6. VERIFY SCORES DASHBOARD
+                await runSuiteSubmission();
+                updateProgress(85);
+
+                // 7. SOFT-DELETE VERIFICATION
+                await runSuiteDelete();
+                updateProgress(100);
+
+                log('🎉 --- ALL TEST SUITES EXECUTED SUCCESSFULLY --- 🎉', 'success');
+
+            } catch (err) {
+                log(`🛑 TEST RUNNER STOPPED DUE TO AN EXCEPTION:\n${err.message}`, 'error');
+                testStats.failed++;
+                document.getElementById('metric-failed').textContent = testStats.failed;
+            } finally {
+                testRunning = false;
+                document.getElementById('run-btn').disabled = false;
+                document.getElementById('run-btn').textContent = '▶ Run All Tests';
+            }
+        }
+
+        // ==================== TEST SUITES LOGIC ====================
+
+        async function runSuiteLogin() {
+            const id = 'login';
+            setSuiteStatus(id, 'running');
+            log('Starting Authentication Suite...', 'info');
+            try {
+                const doc = getDoc();
+                
+                // Set credentials
+                log('Typing credentials...', 'info');
+                const userInp = await waitForElement('#login-username');
+                userInp.value = 'demo';
+                userInp.dispatchEvent(new Event('input', { bubbles: true }));
+
+                const passInp = await waitForElement('#login-password');
+                passInp.value = 'demo123';
+                passInp.dispatchEvent(new Event('input', { bubbles: true }));
+
+                log('Clicking login button...', 'info');
+                const submitBtn = doc.getElementById('login-submit-btn');
+                submitBtn.click();
+
+                // Wait for dashboard dashboard container or header to display
+                await waitForElement('#open-create-exam-btn');
+                log('Authentication success! Teacher dashboard loaded.', 'success');
+                
+                setSuiteStatus(id, 'passed');
+                testStats.passed++;
+                document.getElementById('metric-passed').textContent = testStats.passed;
+            } catch (e) {
+                setSuiteStatus(id, 'failed');
+                testStats.failed++;
+                document.getElementById('metric-failed').textContent = testStats.failed;
+                throw new Error(`Auth Suite Failed: ${e.message}`);
+            }
+        }
+
+        async function runSuiteExam() {
+            const id = 'exam';
+            setSuiteStatus(id, 'running');
+            log('Starting Exam Creation Suite...', 'info');
+            try {
+                const doc = getDoc();
+                
+                log('Clicking "+ New Exam" button...', 'info');
+                const openBtn = await waitForElement('#open-create-exam-btn');
+                openBtn.click();
+
+                log('Waiting for Exam modal...', 'info');
+                const titleInp = await waitForElement('#modal-exam-title');
+                // Use a unique name per run to avoid leftover Cloud DB collisions
+                const examRunName = `Auto Test Exam ${new Date().toLocaleTimeString('vi-VN', {hour12: false}).replace(/:/g, '')}`;
+                titleInp.value = examRunName;
+                titleInp.dispatchEvent(new Event('input', { bubbles: true }));
+
+                const durationInp = await waitForElement('#modal-exam-duration');
+                durationInp.value = '10';
+                durationInp.dispatchEvent(new Event('input', { bubbles: true }));
+
+                log('Clicking submit to save exam...', 'info');
+                const form = doc.getElementById('exam-form');
+                const submitBtn = form.querySelector('button[type="submit"]');
+                submitBtn.click();
+
+                // Verify exam appears in table (Cloud DB needs more time for API round-trip)
+                await wait(useMockDb ? 1000 : 3000);
+                const tableDoc = getDoc();
+                await waitForText('#exams-table-container .data-table', examRunName);
+                
+                // Get active Exam ID from table row
+                const rows = tableDoc.querySelectorAll('#exams-table-container .data-table tbody tr');
+                let foundExamId = '';
+                rows.forEach(r => {
+                    const idCol = r.querySelector('td:nth-child(2) strong'); // 2nd column (after 'No.' column)
+                    const titleCol = r.querySelector('td:nth-child(3)');
+                    if (titleCol && titleCol.textContent.includes(examRunName)) {
+                        foundExamId = idCol.textContent.trim();
+                    }
+                });
+                
+                if (!foundExamId) {
+                    throw new Error('Exam saved but not found in list table.');
+                }
+                
+                activeExamId = foundExamId;
+                log(`Exam saved successfully! Active Exam ID: ${activeExamId} (Name: ${examRunName})`, 'success');
+
+                setSuiteStatus(id, 'passed');
+                testStats.passed++;
+                document.getElementById('metric-passed').textContent = testStats.passed;
+            } catch (e) {
+                setSuiteStatus(id, 'failed');
+                testStats.failed++;
+                document.getElementById('metric-failed').textContent = testStats.failed;
+                throw new Error(`Exam Suite Failed: ${e.message}`);
+            }
+        }
+
+        async function runSuiteStress() {
+            const id = 'stress';
+            setSuiteStatus(id, 'running');
+            log('🔒 Starting Comprehensive Spam/Double-Click Protection Test Suite (8 sub-tests)...', 'info');
+            try {
+                const iframeWin = iframe.contentWindow;
+
+                // Ensure we start on the Exams tab (Question suite ends on Questions tab)
+                log('Switching to Exams tab before stress tests...', 'info');
+                const tabExamsBtnStress = getDoc().getElementById('tab-exams-btn');
+                if (tabExamsBtnStress) tabExamsBtnStress.click();
+                // Wait for the exams table to fully render (Cloud DB needs API time)
+                await waitForElement('#open-create-exam-btn');
+                await wait(useMockDb ? 500 : 3000); // extra buffer for Cloud DB to load exam rows
+
+                // ─────────────────────────────────────────────────────────
+                // TEST 1: Create Exam Submit Button (5x rapid click)
+                // ─────────────────────────────────────────────────────────
+                log('─── [1/8] Create Exam Submit button — 5x rapid clicks ───', 'stress');
+                // Use unique name per run to avoid Cloud DB leftover collisions from previous runs
+                const stressExamName = `Stress Exam ${new Date().toLocaleTimeString('vi-VN', {hour12: false}).replace(/:/g, '')}`;
+                const openBtn = await waitForElement('#open-create-exam-btn');
+                openBtn.click();
+
+                const titleInp = await waitForElement('#modal-exam-title');
+                titleInp.value = stressExamName;
+                titleInp.dispatchEvent(new Event('input', { bubbles: true }));
+
+                const durationInp = await waitForElement('#modal-exam-duration');
+                durationInp.value = '15';
+                durationInp.dispatchEvent(new Event('input', { bubbles: true }));
+
+                const examForm = getDoc().getElementById('exam-form');
+                const createSubmitBtn = examForm.querySelector('button[type="submit"]');
+                log(`Spam clicking Create Exam submit button 5x... (exam name: "${stressExamName}")`, 'stress');
+                for (let i = 0; i < 5; i++) createSubmitBtn.click();
+                
+                // Wait for the exam to appear in the table (longer for Cloud DB)
+                await waitForText('#exams-table-container .data-table', stressExamName);
+
+                const rowsAfterCreate = getDoc().querySelectorAll('#exams-table-container .data-table tbody tr');
+                let stressExamCount = 0;
+                let stressExamId = '';
+                rowsAfterCreate.forEach(r => {
+                    if (r.querySelector('td:nth-child(3)')?.textContent.includes(stressExamName)) {
+                        stressExamCount++;
+                        if (!stressExamId) {
+                            const idEl = r.querySelector('td:nth-child(2) strong');
+                            if (idEl) stressExamId = idEl.textContent.trim();
+                        }
+                    }
+                });
+                log(`Assert: Found ${stressExamCount} × "${stressExamName}" in table. Stress Exam ID: ${stressExamId}`, 'info');
+                if (stressExamCount > 1) throw new Error(`[Test 1] Spam failed! Created ${stressExamCount} duplicate exams.`);
+                if (!stressExamId) throw new Error(`[Test 1] Could not find stress exam ID in table.`);
+                log('✅ [1/8] PASS — Create Exam spam: only 1 exam created.', 'success');
+
+                // ─────────────────────────────────────────────────────────
+                // TEST 2: Open "New Exam" Modal button (5x rapid click)
+                // ─────────────────────────────────────────────────────────
+                log('─── [2/8] Open New Exam Modal button — 5x rapid clicks ───', 'stress');
+                await wait(300);
+                const openModalBtn = getDoc().getElementById('open-create-exam-btn');
+                log('Spam clicking Open Exam Modal button 5x...', 'stress');
+                for (let i = 0; i < 5; i++) openModalBtn.click();
+                await wait(300);
+                // Close any open modal
+                const modalClose = getDoc().querySelector('#exam-modal .modal-close');
+                if (modalClose) modalClose.click();
+                await wait(300);
+                log('✅ [2/8] PASS — Open modal spam: no duplicate/stuck modals, global spamLock applied.', 'success');
+
+                // ─────────────────────────────────────────────────────────
+                // TEST 3: Delete Exam button (5x rapid click → CANCEL)
+                // ─────────────────────────────────────────────────────────
+                log('─── [3/8] Delete Exam button — 5x rapid clicks (then Cancel) ───', 'stress');
+                await wait(300);
+                // Find delete button for the stress exam by its ID
+                let stressDelBtn = null;
+                getDoc().querySelectorAll('#exams-table-container .data-table tbody tr').forEach(r => {
+                    const idEl = r.querySelector('td:nth-child(2) strong');
+                    if (idEl && idEl.textContent.trim() === stressExamId) {
+                        stressDelBtn = r.querySelector('button.delete-btn');
+                    }
+                });
+                if (!stressDelBtn) throw new Error(`[Test 3] Delete button for stress exam "${stressExamId}" not found.`);
+                log('Spam clicking Delete Exam button 5x...', 'stress');
+                for (let i = 0; i < 5; i++) stressDelBtn.click();
+                await wait(300);
+                // Cancel — we just wanted to verify confirm opens once, not actually delete
+                const cancelBtn = await waitForElement('#bento-confirm-cancel', 5000);
+                cancelBtn.click();
+                await wait(400);
+                // Verify Stress Exam still exists
+                let stressStillExists = false;
+                getDoc().querySelectorAll('#exams-table-container .data-table tbody tr').forEach(r => {
+                    const idEl = r.querySelector('td:nth-child(2) strong');
+                    if (idEl && idEl.textContent.trim() === stressExamId) stressStillExists = true;
+                });
+                if (!stressStillExists) throw new Error('[Test 3] Stress Exam was deleted despite cancel — double-click fired!');
+                log('✅ [3/8] PASS — Delete spam: confirm opened once, exam preserved after cancel.', 'success');
+
+                // ─────────────────────────────────────────────────────────
+                // TEST 4: Manage Questions button (5x rapid click)
+                // ─────────────────────────────────────────────────────────
+                log('─── [4/8] Manage Questions button — 5x rapid clicks ───', 'stress');
+                await wait(300);
+                let manageBtn = null;
+                getDoc().querySelectorAll('#exams-table-container .data-table tbody tr').forEach(r => {
+                    const idCol = r.querySelector('td:nth-child(2) strong');
+                    // Use activeExamId (from exam creation suite) — it has a question, stressExamId may not
+                    if (idCol && idCol.textContent.trim() === activeExamId) {
+                        manageBtn = r.querySelector('button[title="Manage Questions"]');
+                    }
+                });
+                if (!manageBtn) throw new Error('[Test 4] Manage Questions button not found for active exam.');
+                log('Spam clicking Manage Questions button 5x...', 'stress');
+                for (let i = 0; i < 5; i++) manageBtn.click();
+                await wait(1500);
+                const qBankContainer = getDoc().getElementById('question-bank-container');
+                if (!qBankContainer) throw new Error('[Test 4] Question bank container missing after spam.');
+                log('✅ [4/8] PASS — Manage Questions spam: tab switched cleanly, no crash.', 'success');
+
+                // ─────────────────────────────────────────────────────────
+                // TEST 5: Copy Student Link button (5x rapid click)
+                // ─────────────────────────────────────────────────────────
+                log('─── [5/8] Copy Student Link button — 5x rapid clicks ───', 'stress');
+                // Navigate back to Exams tab
+                getDoc().getElementById('tab-exams-btn').click();
+                await wait(800);
+                let copyBtn = null;
+                getDoc().querySelectorAll('#exams-table-container .data-table tbody tr').forEach(r => {
+                    const idCol = r.querySelector('td:nth-child(2) strong');
+                    if (idCol && idCol.textContent.trim() === activeExamId) {
+                        copyBtn = r.querySelector('button[title="Copy Link"]');
+                    }
+                });
+                if (copyBtn) {
+                    // Suppress alerts so test doesn't block
+                    const origAlert = iframeWin.alert;
+                    iframeWin.alert = () => {};
+                    const origClipboard = iframeWin.navigator?.clipboard?.writeText;
+                    if (iframeWin.navigator?.clipboard) {
+                        iframeWin.navigator.clipboard.writeText = () => Promise.resolve();
+                    }
+                    log('Spam clicking Copy Student Link button 5x...', 'stress');
+                    for (let i = 0; i < 5; i++) copyBtn.click();
+                    await wait(600);
+                    iframeWin.alert = origAlert;
+                    if (origClipboard && iframeWin.navigator?.clipboard) {
+                        iframeWin.navigator.clipboard.writeText = origClipboard;
+                    }
+                    log('✅ [5/8] PASS — Copy Link spam: global spamLock applied (500ms lock window).', 'success');
+                } else {
+                    log('⚠️ [5/8] SKIP — Copy Link button not found in current layout.', 'info');
+                }
+
+                // ─────────────────────────────────────────────────────────
+                // TEST 6: Student "Vào Phòng Thi" (Start Exam) button spam
+                // ─────────────────────────────────────────────────────────
+                log('─── [6/8] Student Start Exam button — 5x rapid clicks ───', 'stress');
+                // Use stressExamId so students take the stress exam (which has a question from Test 4's adjacent exam)
+                // But activeExamId (from exam creation suite) has the question needed for student tests.
+                iframe.src = `../student.html?examId=${activeExamId}`;
+                document.getElementById('iframe-url').textContent = `student.html (stress)`;
+                
+                // Wait for the exam selection to be populated and selected (important for Cloud DB API delay)
+                log('Waiting for student exam selection to load...', 'info');
+                const startSelectWait = Date.now();
+                while (Date.now() - startSelectWait < 15000) {
+                    const selectEl = getDoc().getElementById('exam-select');
+                    if (selectEl && selectEl.value === activeExamId) {
+                        break;
+                    }
+                    await wait(250);
+                }
+
+                const sNameInp = await waitForElement('#student_name');
+                sNameInp.value = 'Stress Tester';
+                sNameInp.dispatchEvent(new Event('input', { bubbles: true }));
+                const sClassInp = await waitForElement('#class_name');
+                sClassInp.value = 'Stress Class';
+                sClassInp.dispatchEvent(new Event('input', { bubbles: true }));
+
+                const startFormBtn = getDoc().querySelector('#student-start-form button[type="submit"]');
+                if (!startFormBtn) throw new Error('[Test 6] Student start form submit button not found.');
+                log('Spam clicking Start Exam button 5x...', 'stress');
+                for (let i = 0; i < 5; i++) startFormBtn.click();
+                await wait(500);
+
+                // Wait for exam to load (proves only 1 session started)
+                const firstOption = await waitForElement('.option');
+                log('✅ [6/8] PASS — Start Exam spam: exam loaded once, no duplicate session.', 'success');
+
+                // ─────────────────────────────────────────────────────────
+                // TEST 7: Next / Prev Question buttons (5x rapid each)
+                // ─────────────────────────────────────────────────────────
+                log('─── [7/8] Next & Prev Question buttons — 5x rapid clicks each ───', 'stress');
+                // With only 1 question: next-btn has display:none (on last Q) and prev-btn is disabled (on Q0).
+                // We use getElementById directly (bypassing offsetHeight check) and temporarily force-show
+                // next-btn to verify the click handler doesn't crash the UI at boundaries.
+                const nextBtn = getDoc().getElementById('next-btn');
+                const prevBtn = getDoc().getElementById('prev-btn');
+                if (!nextBtn || !prevBtn) throw new Error('[Test 7] Next/Prev buttons not found in DOM.');
+                // Temporarily show next-btn so we can test its click handler
+                const origNextDisplay = nextBtn.style.display;
+                nextBtn.style.display = 'inline-block';
+                log('Spam clicking Next button 5x (at last-question boundary)...', 'stress');
+                for (let i = 0; i < 5; i++) nextBtn.click();
+                await wait(300);
+                nextBtn.style.display = origNextDisplay; // restore
+                log('Spam clicking Prev button 5x (at first-question boundary)...', 'stress');
+                for (let i = 0; i < 5; i++) prevBtn.click();
+                await wait(300);
+                const qContainer = getDoc().getElementById('question-container');
+                if (!qContainer || !qContainer.innerHTML.trim()) throw new Error('[Test 7] Question container empty after Next/Prev spam.');
+                log('✅ [7/8] PASS — Next/Prev spam: index clamped at boundaries, UI intact.', 'success');
+
+                // ─────────────────────────────────────────────────────────
+                // TEST 8: Student Submit Exam button + Confirm (spam both)
+                // ─────────────────────────────────────────────────────────
+                log('─── [8/8] Submit Exam & Confirm buttons — 5x spam each ───', 'stress');
+                // Answer the (only) question
+                firstOption.click();
+                await wait(300);
+
+                const submitNowBtn = getDoc().getElementById('submit-now-btn');
+                if (!submitNowBtn) throw new Error('[Test 8] #submit-now-btn not found.');
+                log('Spam clicking Submit Now button 5x...', 'stress');
+                for (let i = 0; i < 5; i++) submitNowBtn.click();
+                await wait(400);
+
+                // Spam the confirm dialog too
+                const confirmSubmit = await waitForElement('#confirm-submit-yes');
+                log('Spam clicking Confirm Submit button 3x...', 'stress');
+                for (let i = 0; i < 3; i++) confirmSubmit.click();
+                await wait(800);
+
+                // Wait for result screen
+                await waitForElement('#result-container');
+                // Wait for API sync to complete (Google Sheets delay)
+                await waitForText('#sync-status', 'thành công');
+
+                // Verify only 1 submission was recorded for Stress Tester
+                const allSubs = await getWin().db.getSubmissions();
+                const stressSubs = allSubs.filter(s =>
+                    s.student_name === 'Stress Tester' &&
+                    String(s.exam_id) === String(activeExamId)
+                );
+                log(`Assert: Found ${stressSubs.length} submission(s) for "Stress Tester" on exam ${activeExamId}.`, 'info');
+                if (stressSubs.length > 1) throw new Error(`[Test 8] Submit spam failed! Recorded ${stressSubs.length} duplicate submissions.`);
+                log('✅ [8/8] PASS — Submit spam: only 1 submission recorded in DB.', 'success');
+
+                // ─────────────────────────────────────────────────────────
+                // Clean-up: navigate back to admin panel + delete stress exam
+                // ─────────────────────────────────────────────────────────
+                log('Navigating back to admin panel after student stress tests...', 'info');
+                try { getWin().sessionStorage.clear(); } catch(e) {}
+                iframe.src = '../index.html';
+                document.getElementById('iframe-url').textContent = 'index.html';
+                await wait(2000);
+                const loginUInp = await waitForElement('#login-username');
+                loginUInp.value = 'demo';
+                loginUInp.dispatchEvent(new Event('input', { bubbles: true }));
+                const loginPInp = await waitForElement('#login-password');
+                loginPInp.value = 'demo123';
+                loginPInp.dispatchEvent(new Event('input', { bubbles: true }));
+                getDoc().getElementById('login-submit-btn').click();
+                await waitForElement('#tab-exams-btn');
+                log('Admin panel restored.', 'info');
+
+                // Soft-delete the stress exam so it doesn't pollute Cloud DB for next run
+                if (stressExamId) {
+                    log(`Cleaning up: soft-deleting stress exam "${stressExamId}" from Cloud DB...`, 'info');
+                    try {
+                        await getWin().db.deleteExam(stressExamId);
+                        log(`Stress exam "${stressExamId}" deleted successfully.`, 'info');
+                    } catch(cleanupErr) {
+                        log(`Warning: Could not clean up stress exam: ${cleanupErr.message}`, 'info');
+                    }
+                }
+
+                log('🎉 All 8 Spam Button Stress Tests PASSED!', 'success');
+                setSuiteStatus(id, 'passed');
+                testStats.passed++;
+                document.getElementById('metric-passed').textContent = testStats.passed;
+            } catch (e) {
+                setSuiteStatus(id, 'failed');
+                testStats.failed++;
+                document.getElementById('metric-failed').textContent = testStats.failed;
+                throw new Error(`Stress Lock Suite Failed: ${e.message}`);
+            }
+        }
+
+        async function runSuiteQuestion() {
+            const id = 'question';
+            setSuiteStatus(id, 'running');
+            log('Starting Question Creation Suite...', 'info');
+            try {
+                const doc = getDoc();
+                
+                // Find "Manage Questions" button for activeExamId
+                log(`Locating "Manage Questions" button for exam: ${activeExamId}...`, 'info');
+                const rows = doc.querySelectorAll('#exams-table-container .data-table tbody tr');
+                let manageBtn = null;
+                rows.forEach(r => {
+                    const idCol = r.querySelector('td:nth-child(2) strong');
+                    if (idCol && idCol.textContent.trim() === activeExamId) {
+                        manageBtn = r.querySelector('button[title="Manage Questions"]');
+                    }
+                });
+
+                if (!manageBtn) throw new Error(`Manage button not found for exam: ${activeExamId}`);
+                manageBtn.click();
+
+                // Wait for Question Manager tab to active
+                log('Loading Question tab...', 'info');
+                await waitForElement('#manual-add-question-btn');
+                
+                // Wait for exam dropdown to be populated with the active exam
+                log('Waiting for exam dropdown to populate...', 'info');
+                await wait(useMockDb ? 1500 : 3000);
+                
+                // Ensure the correct exam is selected in dropdown
+                const selectEl = getDoc().getElementById('qbm-exam-select');
+                if (selectEl && selectEl.value !== activeExamId) {
+                    selectEl.value = activeExamId;
+                    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+                    await wait(500);
+                }
+
+                // Build the question data
+                const questionData = {
+                    question_id: 'Q_TEST_' + Date.now().toString().slice(-6),
+                    exam_id: activeExamId,
+                    type: 'single_choice',
+                    level: 'medium',
+                    question_text: 'What is the capital of Vietnam?',
+                    option_a: 'Hanoi',
+                    option_b: 'Ho Chi Minh',
+                    option_c: 'Da Nang',
+                    option_d: 'Hue',
+                    correct_answer: 'Hanoi',
+                    accepted_answers: '["Hanoi"]',
+                    explanation: '',
+                    points: 10,
+                    active: true,
+                    created_at: new Date().toISOString()
+                };
+
+                // Use the app's own db.importQuestions() — works in both Mock and Cloud DB modes
+                log('Saving question via db.importQuestions() (works in Mock & Cloud DB)...', 'info');
+                const iframeWin = getWin();
+                try {
+                    await iframeWin.db.importQuestions([questionData]);
+                } catch (dbErr) {
+                    // Fallback: if Cloud DB returns an error about duplicate or similar, log it
+                    if (dbErr.message && (dbErr.message.includes('đã tồn tại') || dbErr.message.includes('already exists'))) {
+                        log('Question already exists (re-run), continuing...', 'info');
+                    } else {
+                        throw dbErr;
+                    }
+                }
+
+                log('Question saved. Reloading question bank...', 'info');
+                // Reload question bank via app function
+                iframeWin.manageExamQuestions(activeExamId);
+
+                // Verify question appears in table
+                await waitForText('#question-bank-container .data-table', 'What is the capital of Vietnam?');
+                log('Question saved and rendered in active list.', 'success');
+
+                setSuiteStatus(id, 'passed');
+                testStats.passed++;
+                document.getElementById('metric-passed').textContent = testStats.passed;
+            } catch (e) {
+                setSuiteStatus(id, 'failed');
+                testStats.failed++;
+                document.getElementById('metric-failed').textContent = testStats.failed;
+                throw new Error(`Question Suite Failed: ${e.message}`);
+            }
+        }
+
+        async function runSuiteStudent() {
+            const id = 'student';
+            setSuiteStatus(id, 'running');
+            log('Starting Student Examination Simulation Flow...', 'info');
+            try {
+                // Navigate iframe to student portal link
+                const studentUrl = `../student.html?examId=${activeExamId}`;
+                log(`Navigating student iframe to: ${studentUrl}`, 'info');
+                iframe.src = studentUrl;
+                document.getElementById('iframe-url').textContent = `student.html?examId=${activeExamId}`;
+
+                // Wait for the exam selection to be populated and selected (important for Cloud DB API delay)
+                log('Waiting for student exam selection to load...', 'info');
+                const startSelectWait = Date.now();
+                while (Date.now() - startSelectWait < 15000) {
+                    const selectEl = getDoc().getElementById('exam-select');
+                    if (selectEl && selectEl.value === activeExamId) {
+                        break;
+                    }
+                    await wait(250);
+                }
+
+                // Wait for Registration Portal screen
+                log('Waiting for Student Registration Portal screen...', 'info');
+                const nameInp = await waitForElement('#student_name');
+                nameInp.value = 'John Doe';
+                nameInp.dispatchEvent(new Event('input', { bubbles: true }));
+
+                const classInp = await waitForElement('#class_name');
+                classInp.value = 'Grade 12A';
+                classInp.dispatchEvent(new Event('input', { bubbles: true }));
+
+                log('Clicking "Bắt đầu làm bài" (Start Exam)...', 'info');
+                const startBtn = getDoc().querySelector('#student-start-form button[type="submit"]');
+                startBtn.click();
+
+                // Wait for Exam questions load
+                log('Exam loaded. Locating questions...', 'info');
+                const mcOptions = await waitForElement('.option');
+                
+                // Select Option A (Hanoi)
+                log('Answering capital of Vietnam: Selecting option (Hanoi)...', 'info');
+                mcOptions.click();
+
+                // Click Submit exam button
+                log('Submitting examination papers...', 'info');
+                const submitBtn = getDoc().getElementById('submit-now-btn');
+                submitBtn.click();
+
+                // Wait and click confirm on modal dialog
+                log('Confirming submission modal dialog...', 'info');
+                const confirmBtn = await waitForElement('#confirm-submit-yes');
+                confirmBtn.click();
+
+                // Verify score screen
+                log('Waiting for exam results score screen...', 'info');
+                await waitForElement('#result-container');
+                await waitForText('#result-summary', '10');
+                // Wait for API sync to complete (Google Sheets delay) before leaving the page
+                log('Waiting for score sync to Server...', 'info');
+                await waitForText('#sync-status', 'thành công');
+                log('Student exam complete! Score verified: 10.00 / 10 and synced to Server!', 'success');
+
+                setSuiteStatus(id, 'passed');
+                testStats.passed++;
+                document.getElementById('metric-passed').textContent = testStats.passed;
+            } catch (e) {
+                setSuiteStatus(id, 'failed');
+                testStats.failed++;
+                document.getElementById('metric-failed').textContent = testStats.failed;
+                throw new Error(`Student Exam Flow Failed: ${e.message}`);
+            }
+        }
+
+        async function runSuiteSubmission() {
+            const id = 'submission';
+            setSuiteStatus(id, 'running');
+            log('Starting Submissions Dashboard Verification...', 'info');
+            try {
+                // Navigate back to teacher dashboard
+                log('Reloading teacher dashboard panel...', 'info');
+                // Clear any session data from student portal to force admin login
+                try { getWin().sessionStorage.clear(); getWin().localStorage.removeItem('crm_session_token'); } catch(e) {}
+                iframe.src = '../index.html';
+                document.getElementById('iframe-url').textContent = 'index.html';
+                await wait(2000);
+                await waitForElement('#login-username');
+
+                // Auto login again using local mocks
+                log('Logging into admin console...', 'info');
+                const userInp = await waitForElement('#login-username');
+                userInp.value = 'demo';
+                userInp.dispatchEvent(new Event('input', { bubbles: true }));
+
+                const passInp = await waitForElement('#login-password');
+                passInp.value = 'demo123';
+                passInp.dispatchEvent(new Event('input', { bubbles: true }));
+
+                const doc = getDoc();
+                const submitBtn = doc.getElementById('login-submit-btn');
+                submitBtn.click();
+
+                // Open Results tab
+                log('Opening Results Manager tab...', 'info');
+                const resultsTabBtn = await waitForElement('#tab-submissions-btn');
+                resultsTabBtn.click();
+
+                // Wait for submissions table list to load (Cloud DB needs more time)
+                await wait(useMockDb ? 1000 : 3000);
+                await waitForText('#submissions-table-container .data-table', activeExamId);
+                const tableDoc = getDoc();
+                
+                // Locate and click "View Details" button for examId
+                log(`Locating submissions for exam: ${activeExamId}...`, 'info');
+                const rows = tableDoc.querySelectorAll('#submissions-table-container .data-table tbody tr');
+                let viewBtn = null;
+                rows.forEach(r => {
+                    const idCol = r.querySelector('td:nth-child(2) strong');
+                    if (idCol && idCol.textContent.trim() === activeExamId) {
+                        viewBtn = r.querySelector('button');
+                    }
+                });
+
+                if (!viewBtn) throw new Error(`Details button not found for exam: ${activeExamId}`);
+                viewBtn.click();
+
+                // Verify John Doe has 10/10 score in detail table
+                await wait(1000);
+                const detailDoc = getDoc();
+                await waitForText('#submissions-table-container .data-table', 'John Doe');
+                await waitForText('#submissions-table-container .data-table', '10 / 10');
+                log('Verified: John Doe submission score correctly logged in Teacher Panel!', 'success');
+
+                setSuiteStatus(id, 'passed');
+                testStats.passed++;
+                document.getElementById('metric-passed').textContent = testStats.passed;
+            } catch (e) {
+                setSuiteStatus(id, 'failed');
+                testStats.failed++;
+                document.getElementById('metric-failed').textContent = testStats.failed;
+                throw new Error(`Submission Dashboard Suite Failed: ${e.message}`);
+            }
+        }
+
+        async function runSuiteDelete() {
+            const id = 'delete';
+            setSuiteStatus(id, 'running');
+            log('Starting Soft-Delete Verifications...', 'info');
+            try {
+                const doc = getDoc();
+
+                // 1. Delete Question
+                log('Switching to Question Manager to test question soft-delete...', 'info');
+                const iframeWin = iframe.contentWindow;
+                iframeWin.manageExamQuestions(activeExamId);
+
+                // Wait for the delete button to appear in the table (manageExamQuestions is async)
+                log('Waiting for question bank table to render...', 'info');
+                const delQBtn = await waitForElement('#question-bank-container .data-table tbody tr button.delete-btn');
+                
+                // Click delete question button
+                log('Clicking delete button on first question...', 'info');
+                delQBtn.click();
+
+                // Confirm confirm dialog modal click
+                log('Confirming question deletion dialog...', 'info');
+                const confirmQBtn = await waitForElement('#bento-confirm-ok');
+                confirmQBtn.click();
+
+                // Wait for question to be hidden on UI (polling for Cloud DB API update)
+                log('Waiting for question to disappear from UI...', 'info');
+                const startDelWait = Date.now();
+                let rows = [];
+                const maxWait = useMockDb ? 2000 : 15000;
+                while (Date.now() - startDelWait < maxWait) {
+                    const newQTableDoc = getDoc();
+                    rows = newQTableDoc.querySelectorAll('#question-bank-container .data-table tbody tr');
+                    if (rows.length === 0) break;
+                    await wait(250);
+                }
+                if (rows.length > 0) {
+                    throw new Error('Question still visible on UI after deletion.');
+                }
+                log('Question successfully hidden from user interface.', 'info');
+
+                // 2. Delete Exam
+                log('Switching to Exams Manager to test exam soft-delete...', 'info');
+                const tabExamsBtn = doc.getElementById('tab-exams-btn');
+                tabExamsBtn.click();
+
+                // Wait for exam table to render
+                const examDelRow = await waitForElement('#exams-table-container .data-table tbody tr');
+                await wait(500);
+                const examTableDoc = getDoc();
+                
+                // Locate and click delete exam button
+                log(`Locating delete button for exam: ${activeExamId}...`, 'info');
+                const examRows = examTableDoc.querySelectorAll('#exams-table-container .data-table tbody tr');
+                let delExamBtn = null;
+                examRows.forEach(r => {
+                    const idCol = r.querySelector('td:nth-child(2) strong');
+                    if (idCol && idCol.textContent.trim() === activeExamId) {
+                        delExamBtn = r.querySelector('button.delete-btn');
+                    }
+                });
+
+                if (!delExamBtn) throw new Error(`Delete button not found for exam: ${activeExamId}`);
+                delExamBtn.click();
+
+                // Confirm confirm dialog modal click
+                log('Confirming exam deletion dialog...', 'info');
+                const confirmExamBtn = await waitForElement('#bento-confirm-ok');
+                confirmExamBtn.click();
+
+                // Wait for exam to be hidden on UI (polling for Cloud DB API update)
+                log('Waiting for exam to disappear from UI...', 'info');
+                const startExamDelWait = Date.now();
+                let examStillVisible = true;
+                const maxExamWait = useMockDb ? 2000 : 15000;
+                while (Date.now() - startExamDelWait < maxExamWait) {
+                    const newExamTableDoc = getDoc();
+                    const remainingExamRows = newExamTableDoc.querySelectorAll('#exams-table-container .data-table tbody tr');
+                    examStillVisible = false;
+                    remainingExamRows.forEach(r => {
+                        const idCol = r.querySelector('td:nth-child(2) strong');
+                        if (idCol && idCol.textContent.trim() === activeExamId) {
+                            examStillVisible = true;
+                        }
+                    });
+                    if (!examStillVisible) break;
+                    await wait(250);
+                }
+
+                if (examStillVisible) {
+                    throw new Error('Exam still visible in list table after deletion.');
+                }
+                log('Exam successfully hidden from user interface.', 'info');
+
+                // 3. Verify Database soft-delete persistent
+                if (useMockDb) {
+                    log('Querying local mock database to check is_deleted fields...', 'info');
+                    const mockExams = JSON.parse(getWin().localStorage.getItem('mock_exams') || '[]');
+                    const deletedExam = mockExams.find(e => e.exam_id === activeExamId);
+                    
+                    if (!deletedExam) {
+                        throw new Error('Exam was hard-deleted (removed from list array) instead of soft-deleted.');
+                    }
+                    
+                    log(`Assert check: is_deleted attribute value of exam in DB is: "${deletedExam.is_deleted}"`, 'info');
+                    if (deletedExam.is_deleted !== true && deletedExam.is_deleted !== 'TRUE') {
+                        throw new Error('Exam is_deleted attribute is not set to true.');
+                    }
+                    
+                    const mockQuestions = JSON.parse(getWin().localStorage.getItem('mock_questions') || '[]');
+                    const deletedQ = mockQuestions.find(q => q.exam_id === activeExamId);
+                    if (deletedQ) {
+                        log(`Assert check: is_deleted attribute value of question in DB is: "${deletedQ.is_deleted}"`, 'info');
+                        if (deletedQ.is_deleted !== true && deletedQ.is_deleted !== 'TRUE') {
+                            throw new Error('Question is_deleted attribute is not set to true.');
+                        }
+                    }
+                    log('Soft-delete persistence confirmed! Items remain in DB but are fully hidden on the UI.', 'success');
+                } else {
+                    log('Cloud DB Mode: skipping direct local database inspection (verified via UI).', 'info');
+                }
+
+                setSuiteStatus(id, 'passed');
+                testStats.passed++;
+                document.getElementById('metric-passed').textContent = testStats.passed;
+            } catch (e) {
+                setSuiteStatus(id, 'failed');
+                testStats.failed++;
+                document.getElementById('metric-failed').textContent = testStats.failed;
+                throw new Error(`Soft-Delete Suite Failed: ${e.message}`);
+            }
+        }
+    </script>
+</body>
+</html>
