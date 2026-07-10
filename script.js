@@ -3,6 +3,7 @@ const API_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzmrkmQbjI-cEpYn86
 let questionsToImport = [];
 let loadedQuestions = []; // Cached questions for the active admin exam
 let aiStagingQuestions = [];
+let aiApiKeys = { gemini: '', chatgpt: '' };
 
 // Helper to escape single quotes in strings for onclick handlers
 const escapeSingleQuotes = (str) => {
@@ -162,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
                 const url = teacherId ? `${endpoint}?action=getExams&teacherId=${encodeURIComponent(teacherId)}` : `${endpoint}?action=getExams`;
-                const response = await fetch(url);
+                const response = await fetch(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now());
                 const result = await response.json();
                 if (result.status === 'success') {
                     localStorage.setItem('mock_exams', JSON.stringify(result.data));
@@ -217,7 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             try {
                 const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
-                const response = await fetch(`${endpoint}?action=getQuestions&examId=${examId}`);
+                const response = await fetch(`${endpoint}?action=getQuestions&examId=${examId}&_t=${Date.now()}`);
                 const result = await response.json();
                 if (result.status === 'success') {
                     // Update cache for this exam
@@ -468,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             try {
                 const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
-                const response = await fetch(endpoint + '?action=getSubmissions');
+                const response = await fetch(endpoint + '?action=getSubmissions&_t=' + Date.now());
                 const result = await response.json();
                 if (result.status === 'success') return result.data.filter(s => s.is_deleted !== true && s.is_deleted !== 'TRUE' && s.is_deleted !== 1 && s.is_deleted !== '1');
                 throw new Error(result.error || 'Failed to fetch submissions.');
@@ -487,7 +488,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             try {
                 const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
-                const response = await fetch(`${endpoint}?action=getSubmissionDetails&submissionId=${submissionId}`);
+                const response = await fetch(`${endpoint}?action=getSubmissionDetails&submissionId=${submissionId}&_t=${Date.now()}`);
                 const result = await response.json();
                 if (result.status === 'success') return result.data;
                 throw new Error(result.error || 'Failed to fetch submission details.');
@@ -540,7 +541,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             try {
                 const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
-                const response = await fetch(endpoint + '?action=getGames');
+                const response = await fetch(endpoint + '?action=getGames&_t=' + Date.now());
                 const result = await response.json();
                 if (result.status === 'success') return result.data.filter(g => g.is_deleted !== true && g.is_deleted !== 'TRUE' && g.is_deleted !== 1 && g.is_deleted !== '1');
                 throw new Error(result.error || 'Failed to fetch games.');
@@ -607,6 +608,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (idx !== -1) games[idx].is_deleted = true;
                 localStorage.setItem('mock_games', JSON.stringify(games));
                 return { status: 'success' };
+            }
+        },
+
+        async getAiKeys() {
+            try {
+                const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
+                const response = await fetch(endpoint + '?action=getAiKeys&_t=' + Date.now());
+                const result = await response.json();
+                if (result.status === 'success') return result.data;
+                return {};
+            } catch (error) {
+                console.warn('Failed to fetch AI keys', error);
+                return {};
+            }
+        },
+
+        async saveAiKeys(payload) {
+            try {
+                const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
+                const response = await fetch(endpoint + '?action=saveAiKeys', {
+                    method: 'POST', mode: 'cors', redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (result.status === 'success') return result;
+                throw new Error(result.error || 'Failed to save AI keys.');
+            } catch (error) {
+                throw new Error(`Lỗi lưu API Keys: ${error.message}`);
             }
         }
     };
@@ -689,6 +719,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadAdminMode() {
+        // Fetch AI Keys in background
+        db.getAiKeys().then(keys => {
+            aiApiKeys = keys || {};
+            if (aiApiKeys.gemini) populateAiModels(aiApiKeys.gemini);
+        });
+
         const session = JSON.parse(sessionStorage.getItem('teacher_session') || 'null');
         const teacherName = session ? session.name : 'Admin';
         const teacherAvatar = session ? session.avatar : 'Admin';
@@ -749,24 +785,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     <!-- AI Question Generator Card -->
                     <div class="bento-card" style="margin-bottom: 1.5rem; background: var(--bg-item); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 1.5rem; box-shadow: var(--shadow-sm); box-sizing: border-box; text-align: left;">
-                        <h3 style="margin-top: 0; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">✨ AI Question Generator (Gemini AI)</h3>
-                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: -0.5rem; margin-bottom: 1.25rem;">
-                            Tự động soạn câu hỏi tiếng Anh thông minh theo chủ đề và dạng bài tập tùy chọn.
-                        </p>
-                        
-                        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; margin-bottom: 1rem; align-items: start;">
+                        <!-- Card Header: Title left, Provider + Model right -->
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 0.25rem; flex-wrap: wrap;">
+                            <div>
+                                <h3 style="margin: 0; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">✨ AI Question Generator</h3>
+                                <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0.25rem 0 0 0;">Tự động soạn câu hỏi tiếng Anh thông minh theo chủ đề và dạng bài tập tùy chọn.</p>
+                            </div>
+                            <div style="display: flex; align-items: flex-end; gap: 0.75rem; flex-shrink: 0;">
+                                <div>
+                                    <label for="ai-provider-select" style="font-weight: 700; font-size: 0.8rem; display: block; margin-bottom: 0.2rem; color: var(--text-muted);">AI Provider:</label>
+                                    <select id="ai-provider-select" style="border: 2px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.4rem 0.6rem; background: white; font-family: var(--font); font-size: 0.85rem; font-weight: 600; min-width: 120px;">
+                                        <option value="gemini" selected>Gemini AI</option>
+                                        <option value="chatgpt">ChatGPT</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="ai-model-select" style="font-weight: 700; font-size: 0.8rem; display: block; margin-bottom: 0.2rem; color: var(--text-muted);">AI Model:</label>
+                                    <select id="ai-model-select" style="border: 2px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.4rem 0.6rem; background: white; font-family: var(--font); font-size: 0.85rem; font-weight: 600; min-width: 180px;">
+                                        <option value="gemini-3.1-flash-lite" selected>Gemini 3.1 Flash Lite (Default)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; margin-top: 1.25rem; margin-bottom: 1rem; align-items: start;">
                             <div>
                                 <label for="ai-prompt-topic" style="font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.25rem; color: var(--text-main);">Chủ đề học tập hoặc Đoạn văn mẫu:</label>
                                 <textarea id="ai-prompt-topic" placeholder="Ví dụ: Relative clauses, Conditional sentences, hoặc dán một đoạn văn tiếng Anh để tạo câu hỏi đọc hiểu..." style="width: 100%; height: 140px; border: 2px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.6rem; box-sizing: border-box; font-family: var(--font); resize: vertical; line-height: 1.4;"></textarea>
                             </div>
                             <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                                <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 0.75rem;">
-                                    <div>
-                                        <label for="ai-model-select" style="font-weight: 700; font-size: 0.85rem; display: block; margin-bottom: 0.25rem; color: var(--text-main);">AI Model:</label>
-                                        <select id="ai-model-select" style="width: 100%; border: 2px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem; box-sizing: border-box; background: white; font-family: var(--font); font-size: 0.85rem; font-weight: 600;">
-                                            <option value="gemini-1.5-flash" selected>1.5 Flash (Default)</option>
-                                        </select>
-                                    </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
                                     <div>
                                         <label for="ai-level-select" style="font-weight: 700; font-size: 0.85rem; display: block; margin-bottom: 0.25rem; color: var(--text-main);">Độ khó:</label>
                                         <select id="ai-level-select" style="width: 100%; border: 2px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem; box-sizing: border-box; background: white; font-family: var(--font); font-size: 0.85rem; font-weight: 600;">
@@ -796,30 +844,36 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
                         <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem;">
-                            <button id="ai-generate-btn" class="btn-primary" style="background: linear-gradient(135deg, var(--primary) 0%, #a855f7 100%);"><img src="images/ai.png" alt="AI" width="25" height="25"> Generate Questions by AI</button>
+                            <button id="ai-generate-btn" class="btn-primary" style="background: linear-gradient(135deg, var(--primary) 0%, #a855f7 100%);"><img src="images/ai.png" alt="AI" width="25" height="25" style="vertical-align: middle;"> Generate Questions by AI</button>
                         </div>
+                    </div>
 
-                        <!-- AI Staging & Preview Area -->
-                        <div id="ai-preview-container" style="display: none; margin-top: 1.5rem; border-top: 2px dashed var(--border-color); padding-top: 1.5rem; box-sizing: border-box;">
-                            <h4 style="margin-top: 0; display: flex; align-items: center; justify-content: space-between; font-size: 1.1rem; color: var(--text-main);">
-                                <span>📋 Xem trước danh sách câu hỏi AI soạn (<span id="ai-staging-count">0</span> câu)</span>
-                                <button id="ai-clear-staging-btn" class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; background-color: var(--accent-light); color: var(--accent); border-color: rgba(255,107,107,0.2); font-weight: bold;">Xoá hết</button>
-                            </h4>
+                    <!-- AI Preview Modal -->
+                    <div id="ai-preview-modal" class="modal">
+                        <div class="modal-content" style="max-width: 900px; width: 95vw; max-height: 90vh; display: flex; flex-direction: column; padding: 0;">
+                            <div class="modal-header" style="padding: 1.5rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: white; position: sticky; top: 0; z-index: 10;">
+                                <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem; color: var(--text-main);">
+                                    <span>📋 AI Generated Questions (<span id="ai-staging-count">0</span> questions)</span>
+                                </h3>
+                                <button class="modal-close" onclick="closeAiPreviewModal()" style="position: relative; right: 0; top: 0;">&times;</button>
+                            </div>
                             
-                            <div id="ai-staging-list" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; max-height: 500px; overflow-y: auto; padding-right: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1rem; background: var(--bg-main);">
-                                <!-- Interactive edit cards will be rendered here -->
+                            <div style="padding: 1.5rem; flex: 1; overflow-y: auto; background: var(--bg-main);">
+                                <div id="ai-staging-list" style="display: flex; flex-direction: column; gap: 1rem;">
+                                    <!-- Interactive edit cards will be rendered here -->
+                                </div>
                             </div>
 
-                            <div style="display: flex; align-items: center; justify-content: space-between; background: var(--primary-light); padding: 1rem; border-radius: var(--radius); border: 1px solid rgba(79, 70, 229, 0.15); box-sizing: border-box; flex-wrap: wrap; gap: 1rem;">
+                            <div style="padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); background: var(--primary-light); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <label for="ai-import-exam-select" style="font-weight: 700; color: var(--primary); font-size: 0.95rem;">Đề thi đích:</label>
+                                    <label for="ai-import-exam-select" style="font-weight: 700; color: var(--primary); font-size: 0.95rem; white-space: nowrap;">Target Exam:</label>
                                     <select id="ai-import-exam-select" style="border: 2px solid var(--primary); border-radius: var(--radius-sm); padding: 0.4rem; font-family: var(--font); font-weight: 600; background: white;">
-                                        <option value="">-- Chọn Đề thi --</option>
+                                        <option value="">-- Select Exam --</option>
                                     </select>
                                 </div>
                                 <div style="display: flex; gap: 0.5rem;">
-                                    <button id="ai-generate-more-btn" class="btn-secondary" style="background: white; border: 2px solid var(--primary); color: var(--primary); font-weight: bold;">➕ Soạn thêm câu tương tự</button>
-                                    <button id="ai-commit-btn" class="btn-primary" style="font-weight: bold; background: var(--primary);">💾 Nhập câu hỏi vào Đề thi</button>
+                                    <button id="ai-generate-more-btn" class="btn-secondary" style="background: white; border: 2px solid var(--primary); color: var(--primary); font-weight: bold;">➕ Generate More</button>
+                                    <button id="ai-commit-btn" class="btn-primary" style="font-weight: bold; background: var(--primary);">💾 Import to Exam</button>
                                 </div>
                             </div>
                         </div>
@@ -915,32 +969,90 @@ document.addEventListener('DOMContentLoaded', () => {
         const tabSubmissionsContent = document.getElementById('tab-submissions-content');
         const tabGamesContent = document.getElementById('tab-games-content');
 
-        const switchTab = (activeBtn, activeContent) => {
+        // --- URL Hash State Persistence ---
+        // Helper: parse hash to get {tab, examId}
+        function getHashState() {
+            const hash = window.location.hash.slice(1); // remove '#'
+            const params = new URLSearchParams(hash);
+            return { tab: params.get('tab') || 'exams', examId: params.get('examId') || '' };
+        }
+
+        function setHashState(tab, examId) {
+            const params = new URLSearchParams();
+            params.set('tab', tab);
+            if (examId) params.set('examId', examId);
+            history.replaceState(null, '', '#' + params.toString());
+        }
+
+        const switchTab = (activeBtn, activeContent, tabKey) => {
             allTabBtns.forEach(btn => btn.classList.remove('active'));
             allTabContents.forEach(c => { if (c) c.style.display = 'none'; });
             activeBtn.classList.add('active');
             activeContent.style.display = 'block';
+            const currentExam = document.getElementById('qbm-exam-select')?.value || '';
+            setHashState(tabKey, tabKey === 'questions' ? currentExam : '');
         };
 
         tabExamsBtn.addEventListener('click', () => {
-            switchTab(tabExamsBtn, tabExamsContent);
+            switchTab(tabExamsBtn, tabExamsContent, 'exams');
             loadExamsList();
         });
 
         tabQuestionsBtn.addEventListener('click', () => {
-            switchTab(tabQuestionsBtn, tabQuestionsContent);
+            switchTab(tabQuestionsBtn, tabQuestionsContent, 'questions');
             populateExamsDropdown();
         });
 
         tabSubmissionsBtn.addEventListener('click', () => {
-            switchTab(tabSubmissionsBtn, tabSubmissionsContent);
+            switchTab(tabSubmissionsBtn, tabSubmissionsContent, 'submissions');
             loadSubmissionsExams();
         });
 
         tabGamesBtn.addEventListener('click', () => {
-            switchTab(tabGamesBtn, tabGamesContent);
+            switchTab(tabGamesBtn, tabGamesContent, 'games');
             loadGamesList();
         });
+
+        // Save examId to hash when exam dropdown changes in Question Manager
+        const qbmExamSelect = document.getElementById('qbm-exam-select');
+        if (qbmExamSelect) {
+            qbmExamSelect.addEventListener('change', () => {
+                const currentHash = getHashState();
+                if (currentHash.tab === 'questions') {
+                    setHashState('questions', qbmExamSelect.value);
+                }
+            });
+        }
+
+        // Restore state from hash on load
+        const hashState = getHashState();
+        if (hashState.tab === 'questions') {
+            switchTab(tabQuestionsBtn, tabQuestionsContent, 'questions');
+            populateExamsDropdown().then(() => {
+                if (hashState.examId) {
+                    // Use requestAnimationFrame to ensure DOM is flushed after populateExamsDropdown
+                    requestAnimationFrame(() => {
+                        const sel = document.getElementById('qbm-exam-select');
+                        if (sel) {
+                            sel.value = hashState.examId;
+                            // Verify value was set (option must exist in dropdown)
+                            if (sel.value === hashState.examId) {
+                                loadQuestionBank();
+                            }
+                        }
+                    });
+                }
+            }).catch(() => {});
+        } else if (hashState.tab === 'submissions') {
+            switchTab(tabSubmissionsBtn, tabSubmissionsContent, 'submissions');
+            loadSubmissionsExams();
+        } else if (hashState.tab === 'games') {
+            switchTab(tabGamesBtn, tabGamesContent, 'games');
+            loadGamesList();
+        } else {
+            // Default: exams tab
+            loadExamsList();
+        }
 
 
         // Settings Button modal trigger
@@ -998,9 +1110,8 @@ document.addEventListener('DOMContentLoaded', () => {
             downloadSampleBtn.addEventListener('click', exportSampleTemplate);
         }
 
-        // Initially load exams list
+        // Initially load based on hash state (handled above in tab restoration logic)
         initAiQuestionGenerator();
-        loadExamsList();
     }
 
     const MD_GUIDE_CONTENT = `# Hướng Dẫn Sử Dụng Nền Tảng EnglishTools Teacher Portal
@@ -1099,6 +1210,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             </div>
         `;
         document.body.appendChild(modal);
+        if (!modal.classList.contains('active')) requestAnimationFrame(() => modal.classList.add('active'));
 
         const contentDiv = document.getElementById('guide-markdown-content');
 
@@ -1156,9 +1268,13 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     
                     <hr style="border: 0.5px solid var(--border-color); margin: 0.5rem 0;">
                     <label for="gemini-key-input" style="font-weight:700;">Google Gemini API Key:</label>
-                    <input type="password" id="gemini-key-input" value="${localStorage.getItem('gemini_api_key') || ''}" placeholder="AIzaSy..." style="width:100%; border:2px solid var(--border-color); border-radius:var(--radius-sm); padding:0.6rem; box-sizing:border-box;">
-                    <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
-                        <button id="save-gemini-key-btn" class="btn-primary" style="flex:1; background: linear-gradient(135deg, var(--primary) 0%, #a855f7 100%); border: none; font-weight: bold;">Save Gemini Key</button>
+                    <input type="password" id="gemini-key-input" value="${aiApiKeys.gemini || ''}" placeholder="AIzaSy..." style="width:100%; border:2px solid var(--border-color); border-radius:var(--radius-sm); padding:0.6rem; box-sizing:border-box;">
+                    
+                    <label for="chatgpt-key-input" style="font-weight:700; margin-top: 0.5rem; display: block;">ChatGPT API Key:</label>
+                    <input type="password" id="chatgpt-key-input" value="${aiApiKeys.chatgpt || ''}" placeholder="sk-..." style="width:100%; border:2px solid var(--border-color); border-radius:var(--radius-sm); padding:0.6rem; box-sizing:border-box;">
+
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                        <button id="save-ai-keys-btn" class="btn-primary" style="flex:1; background: linear-gradient(135deg, var(--primary) 0%, #a855f7 100%); border: none; font-weight: bold;">Save AI Keys to Cloud</button>
                     </div>
 
                     <hr style="border: 0.5px solid var(--border-color); margin: 0.5rem 0;">
@@ -1171,6 +1287,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             </div>
         `;
         document.body.appendChild(modal);
+        if (!modal.classList.contains('active')) requestAnimationFrame(() => modal.classList.add('active'));
 
         const apiInput = document.getElementById('api-url-input');
         const saveApiBtn = document.getElementById('save-api-url-btn');
@@ -1180,21 +1297,33 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         const statusMsg = document.getElementById('api-status-msg');
 
         const geminiInput = document.getElementById('gemini-key-input');
-        const saveGeminiBtn = document.getElementById('save-gemini-key-btn');
+        const chatgptInput = document.getElementById('chatgpt-key-input');
+        const saveAiKeysBtn = document.getElementById('save-ai-keys-btn');
 
-        saveGeminiBtn.addEventListener('click', () => {
-            const keyVal = geminiInput.value.trim();
-            if (keyVal) {
-                localStorage.setItem('gemini_api_key', keyVal);
-                statusMsg.textContent = 'Gemini API Key Saved!';
+        saveAiKeysBtn.addEventListener('click', async () => {
+            const geminiVal = geminiInput.value.trim();
+            const chatgptVal = chatgptInput.value.trim();
+
+            saveAiKeysBtn.disabled = true;
+            saveAiKeysBtn.textContent = 'Saving...';
+            statusMsg.textContent = 'Đang lưu API Keys...';
+            statusMsg.style.color = '#2563eb';
+
+            try {
+                await db.saveAiKeys({ gemini: geminiVal, chatgpt: chatgptVal });
+                aiApiKeys.gemini = geminiVal;
+                aiApiKeys.chatgpt = chatgptVal;
+
+                statusMsg.textContent = 'AI Keys Saved to Cloud!';
                 statusMsg.style.color = '#15803d';
-                // Trigger dynamic registry models reload
-                populateAiModels(keyVal);
-            } else {
-                localStorage.removeItem('gemini_api_key');
-                statusMsg.textContent = 'Gemini API Key Removed!';
+                // Trigger dynamic registry models reload if applicable
+                populateAiModels(aiApiKeys.gemini);
+            } catch (err) {
+                statusMsg.textContent = 'Lỗi lưu AI Keys: ' + err.message;
                 statusMsg.style.color = '#b45309';
-                populateAiModels(null);
+            } finally {
+                saveAiKeysBtn.disabled = false;
+                saveAiKeysBtn.textContent = 'Save AI Keys to Cloud';
             }
         });
 
@@ -1277,8 +1406,23 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         showLoader('Loading exams...');
         container.innerHTML = '<p class="loading-message">Loading exams...</p>';
         try {
-            const examsResponse = await db.getExams();
+            // Fetch exams and questions in parallel for performance
+            const [examsResponse] = await Promise.all([
+                db.getExams()
+            ]);
             const exams = examsResponse.sort((a, b) => new Date(b.created_at || parseInt((b.exam_id || '').split('_').pop()) || 0) - new Date(a.created_at || parseInt((a.exam_id || '').split('_').pop()) || 0));
+
+            // Build question count map from local cache (populated when questions are loaded per exam)
+            const questionCountMap = {};
+            try {
+                const cachedQs = JSON.parse(localStorage.getItem('mock_questions') || '[]');
+                cachedQs.forEach(q => {
+                    if (q.is_deleted === true || q.is_deleted === 'TRUE' || q.is_deleted === '1' || q.is_deleted === 1) return;
+                    const eid = String(q.exam_id || '');
+                    if (eid) questionCountMap[eid] = (questionCountMap[eid] || 0) + 1;
+                });
+            } catch (_) { /* ignore cache errors */ }
+
             if (exams.length === 0) {
                 container.innerHTML = '<p class="info-message">No exams found. Click "Create New Exam" to create one!</p>';
                 hideLoader();
@@ -1293,9 +1437,10 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                             <th>Exam ID</th>
                             <th>Title</th>
                             <th>Duration</th>
+                            <th style="text-align:center;">Questions</th>
                             <th>Active</th>
                             <th>Created At</th>
-                            <th>Actions</th>
+                            <th style="white-space:nowrap;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1305,6 +1450,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 const isActive = exam.active === true || exam.active === 'TRUE' || exam.active === '1' || exam.active === 1;
                 const formattedDate = exam.created_at ? new Date(exam.created_at).toLocaleString() : 'N/A';
                 const examStr = JSON.stringify(exam);
+                const qCount = questionCountMap[String(exam.exam_id)] || 0;
 
                 table += `
                     <tr>
@@ -1312,19 +1458,22 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         <td><strong>${exam.exam_id}</strong></td>
                         <td>${exam.title}</td>
                         <td>${exam.duration_minutes} mins</td>
+                        <td style="text-align:center;">
+                            <span style="font-weight:800; font-size:1rem; color:${qCount > 0 ? 'var(--primary)' : 'var(--text-muted)'};">${qCount}</span>
+                        </td>
                         <td>
                             <span class="badge" style="background-color: ${isActive ? 'var(--secondary-light)' : 'var(--accent-light)'}; color: ${isActive ? '#15803d' : '#b91c1c'}; border: 1px solid ${isActive ? 'rgba(107,203,119,0.3)' : 'rgba(255,107,107,0.3)'}; font-weight:800; display:inline-block; text-align:center;">
                                 ${isActive ? 'Active' : 'Inactive'}
                             </span>
                         </td>
                         <td style="font-size:0.85rem; color:var(--text-muted);">${formattedDate}</td>
-                        <td>
-                            <div style="display:flex; gap:0.25rem; flex-wrap:wrap;">
-                                <button class="edit-btn" title="Edit Exam" onclick='showExamModal(${examStr})'>🖍</button>
-                                <button class="edit-btn" title="Copy Link" style="background-color:var(--secondary); color:white;" onclick="copyStudentLink('${exam.exam_id}')">🔗 Link</button>
-                                <button class="edit-btn" title="Manage Questions" style="background-color:var(--primary); color:white;" onclick="manageExamQuestions('${exam.exam_id}')">Manage Questions</button>
-                                <button class="edit-btn" title="Print Exam" style="background-color:#002860; color:white;" onclick="showPrintExamModal('${exam.exam_id}')">🖨️ </button>
-                                <button class="delete-btn" title="Delete Exam" onclick="deleteExam('${exam.exam_id}')">🗑️</button>
+                        <td style="white-space:nowrap;">
+                            <div style="display:flex; gap:0.25rem; flex-wrap:nowrap;">
+                                <button class="edit-btn" title="Edit Exam" onclick='showExamModal(${examStr})'><i class="fa fa-pen" style="color:#6366f1;"></i></button>
+                                <button class="edit-btn" title="Copy Link" style="background-color:var(--secondary); color:white;" onclick="copyStudentLink('${exam.exam_id}')"><i class="fa fa-link"></i> Link</button>
+                                <button class="edit-btn" title="Manage Questions" style="background-color:var(--primary); color:white;" onclick="manageExamQuestions('${exam.exam_id}')"><i class="fa fa-list-check"></i> Questions</button>
+                                <button class="edit-btn" title="Print Exam" style="background-color:#002860; color:white;" onclick="showPrintExamModal('${exam.exam_id}')"><i class="fa fa-print"></i></button>
+                                <button class="delete-btn" title="Delete Exam" onclick="deleteExam('${exam.exam_id}')"><i class="fa fa-trash"></i></button>
                             </div>
                         </td>
                     </tr>
@@ -1379,6 +1528,12 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             select.value = examId;
             loadQuestionBank();
         }
+
+        // Update URL hash so reload restores this view
+        const hashParams = new URLSearchParams();
+        hashParams.set('tab', 'questions');
+        hashParams.set('examId', examId);
+        history.replaceState(null, '', '#' + hashParams.toString());
     };
 
     window.deleteExam = async function (examId) {
@@ -1434,6 +1589,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             </div>
         `;
         document.body.appendChild(modal);
+        if (!modal.classList.contains('active')) requestAnimationFrame(() => modal.classList.add('active'));
     };
 
     window.executePrintExam = async function (examId, withAnswers) {
@@ -1628,25 +1784,27 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     </div>`;
                 return;
             }
-            container.innerHTML = '<div class="game-grid">' + games.map(g => `
+            container.innerHTML = '<div class="game-grid">' + games.map(g => {
+                const safeJson = JSON.stringify(g).replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+                return `
                 <div class="game-card">
                     <div class="game-card-img">
-                        ${g.image_url ? `<img src="${g.image_url}" alt="${g.name}" onerror="this.parentElement.innerHTML='🎮'">` : '🎮'}
+                        ${g.image_url ? `<img src="${g.image_url}" alt="${(g.name || '').replace(/"/g, '&quot;')}" onerror="this.parentElement.innerHTML='🎮'">` : '🎮'}
                     </div>
                     <div class="game-card-body">
-                        <p class="game-card-title">${g.name || 'Game'}</p>
-                        <p class="game-card-url" title="${g.url}">🔗 ${g.url || 'N/A'}</p>
+                        <p class="game-card-title">${(g.name || 'Game').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+                        <p class="game-card-url" title="${(g.url || '').replace(/"/g, '&quot;')}">🔗 ${(g.url || 'N/A').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
                         <div class="game-card-actions">
-                            <button class="btn-copy-url" onclick="copyGameUrl('${(g.url || '').replace(/'/g, '\\&apos;')}')">📋 Copy URL</button>
-                            <a class="btn-play-game" href="${g.url}" target="_blank" rel="noopener">▶️ Open</a>
+                            <button class="btn-copy-url" onclick="copyGameUrl('${(g.url || '').replace(/'/g, "\\'")}')"><i class="fa fa-copy"></i> Copy URL</button>
+                            <a class="btn-play-game" href="${(g.url || '').replace(/"/g, '&quot;')}" target="_blank" rel="noopener">▶️ Open</a>
                         </div>
                         <div class="game-card-actions" style="margin-top:0.3rem;">
-                            <button class="btn-secondary" style="flex:1;font-size:0.8rem;" onclick='showGameModal(${JSON.stringify(g)})'>✏️ Edit</button>
-                            <button class="delete-btn" style="flex:1;font-size:0.8rem;" onclick="deleteGameEntry('${g.game_id}')">🗑 Delete</button>
+                            <button class="btn-secondary" style="flex:1;font-size:0.8rem;" onclick="showGameModal(${safeJson})"><i class="fa fa-pen" style="color:#6366f1;"></i> Edit</button>
+                            <button class="delete-btn" style="flex:1;font-size:0.8rem;" onclick="deleteGameEntry('${g.game_id}')"><i class="fa fa-trash"></i> Delete</button>
                         </div>
                     </div>
                 </div>
-            `).join('') + '</div>';
+            `}).join('') + '</div>';
         } catch (err) {
             container.innerHTML = `<p class="error-message">Error loading game: ${err.message}</p>`;
         }
@@ -1708,6 +1866,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             </div>
         `;
         document.body.appendChild(modal);
+        if (!modal.classList.contains('active')) requestAnimationFrame(() => modal.classList.add('active'));
 
         document.getElementById('game-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -1779,6 +1938,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             </div>
         `;
         document.body.appendChild(modal);
+        if (!modal.classList.contains('active')) requestAnimationFrame(() => modal.classList.add('active'));
 
         let isSavingExam = false;
         const form = document.getElementById('exam-form');
@@ -2421,8 +2581,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             // Actions — use data-idx (NO JSON in onclick) so special chars in question fields don't break the button
             table += `
                 <td class="actions-cell">
-                    <button class="edit-btn qb-edit-btn" title="Edit Question" data-idx="${idx}">🖍</button>
-                    <button class="delete-btn" title="Delete Question" onclick="deleteQuestion('${q.question_id}', '${q.exam_id}')">🗑</button>
+                    <button class="edit-btn qb-edit-btn" title="Edit Question" data-idx="${idx}"><i class="fa fa-pen" style="color:#6366f1;"></i></button>
+                    <button class="delete-btn" title="Delete Question" onclick="deleteQuestion('${q.question_id}', '${q.exam_id}')"><i class="fa fa-trash"></i></button>
                 </td>
             `;
 
@@ -2724,6 +2884,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         `;
 
         document.body.appendChild(modal);
+        if (!modal.classList.contains('active')) requestAnimationFrame(() => modal.classList.add('active'));
 
         // Apply type hints on change
         const typeSelect = document.getElementById('edit-type');
@@ -3696,6 +3857,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             </div>
         `;
         document.body.appendChild(modal);
+        if (!modal.classList.contains('active')) requestAnimationFrame(() => modal.classList.add('active'));
 
         // Guard against duplicate submission (detached DOM elements bypass global spamLock)
         let alreadySubmitted = false;
@@ -3930,7 +4092,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
      * Result Display Agent (Part 4)
      */
     function formatAnswerForDisplay(ans) {
-        if (!ans) return '';
+        if (ans === undefined || ans === null || ans === '') return '';
+        if (typeof ans === 'boolean') return ans ? 'True' : 'False';
         if (typeof ans === 'string') {
             const trimmed = ans.trim();
             if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
@@ -4474,7 +4637,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         </td>
                         <td style="font-weight: 800; font-size: 1.1rem; color: var(--primary);">${count} student(s)</td>
                         <td>
-                            <button class="edit-btn" style="background-color: var(--primary); color: white;" onclick="viewExamSubmissions('${exam.exam_id}')">View Submissions</button>
+                            <button class="edit-btn" style="background-color: var(--primary); color: white;" onclick="viewExamSubmissions('${exam.exam_id}')"><i class="fa fa-chart-bar"></i> View Results</button>
                         </td>
                     </tr>
                 `;
@@ -4549,8 +4712,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         <td>${durationStr}</td>
                         <td style="font-size: 0.85rem; color: var(--text-muted);">${submittedDate}</td>
                         <td>
-                            <button class="edit-btn" onclick="viewSubmissionDetailsModal('${sub.submission_id}', '${escapeSingleQuotes(sub.student_name)}', '${escapeSingleQuotes(sub.exam_title || examId)}')">View Answers</button>
-                            <button class="delete-btn" onclick="deleteSubmissionEntry('${sub.submission_id}', '${escapeSingleQuotes(sub.student_name)}', '${examId}')" title="Xoá kết quả & cho học sinh làm lại">🔄 Reset</button>
+                            <button class="edit-btn" onclick="viewSubmissionDetailsModal('${sub.submission_id}', '${escapeSingleQuotes(sub.student_name)}', '${escapeSingleQuotes(sub.exam_title || examId)}')"><i class="fa fa-eye" style="color:#6366f1;"></i> View Answers</button>
+                            <button class="delete-btn" onclick="deleteSubmissionEntry('${sub.submission_id}', '${escapeSingleQuotes(sub.student_name)}', '${examId}')" title="Delete result &amp; allow retake"><i class="fa fa-rotate-left"></i> Reset</button>
                         </td>
                     </tr>
                 `;
@@ -4600,6 +4763,9 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             </div>
         `;
         document.body.appendChild(modal);
+        if (!modal.classList.contains('active')) requestAnimationFrame(() => modal.classList.add('active'));
+        // Must add 'active' class AFTER appending so the CSS .modal.active rule takes effect
+        requestAnimationFrame(() => modal.classList.add('active'));
 
         const container = document.getElementById('modal-submission-details-container');
         showLoader('Loading answer details...');
@@ -4934,6 +5100,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             const checkedBoxes = document.querySelectorAll('#ai-types-checkboxes input:checked');
             const selectedTypes = Array.from(checkedBoxes).map(cb => cb.value);
 
+            const provider = document.getElementById('ai-provider-select')?.value || 'gemini';
+
             if (!topic) {
                 alert('Vui lòng nhập chủ đề hoặc đoạn văn mẫu để AI nhận diện ngữ cảnh.');
                 return;
@@ -4943,39 +5111,42 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 return;
             }
 
-            const geminiKey = localStorage.getItem('gemini_api_key');
-            if (!geminiKey) {
-                alert('Chưa cấu hình Gemini API Key. Vui lòng bấm vào biểu tượng bánh răng (Cấu hình) ở góc dưới bên trái để nhập API Key.');
+            const apiKey = aiApiKeys[provider];
+            if (!apiKey) {
+                alert(`Chưa cấu hình API Key cho ${provider.toUpperCase()}. Vui lòng bấm vào biểu tượng bánh răng (Cấu hình) ở góc dưới bên trái để nhập API Key.`);
                 return;
             }
 
-            showLoader('Gemini AI đang soạn câu hỏi, vui lòng đợi...');
+            showLoader(`${provider.toUpperCase()} AI đang soạn câu hỏi, vui lòng đợi...`);
             try {
-                const newQuestions = await callGeminiToGenerate(topic, level, quantity, selectedTypes, geminiKey, modelName);
+                let newQuestions = [];
+                if (provider === 'gemini') {
+                    newQuestions = await callGeminiToGenerate(topic, level, quantity, selectedTypes, apiKey, modelName);
+                } else if (provider === 'chatgpt') {
+                    newQuestions = await callChatGPTToGenerate(topic, level, quantity, selectedTypes, apiKey, modelName);
+                }
+
                 if (newQuestions && newQuestions.length > 0) {
                     aiStagingQuestions = newQuestions;
                     renderStagingQuestions();
-                    document.getElementById('ai-preview-container').style.display = 'block';
+                    const modal = document.getElementById('ai-preview-modal');
+                    if (modal) modal.classList.add('active');
                     alert(`AI đã soạn thành công ${newQuestions.length} câu hỏi! Vui lòng kiểm tra lại phía dưới.`);
                 } else {
-                    alert('Gemini không trả về câu hỏi hợp lệ. Vui lòng thử lại với prompt khác.');
+                    alert(`${provider.toUpperCase()} không trả về câu hỏi hợp lệ. Vui lòng thử lại với prompt khác.`);
                 }
             } catch (err) {
-                alert('Lỗi khi gọi Gemini API: ' + err.message);
+                alert(`Lỗi khi gọi ${provider.toUpperCase()} API: ` + err.message);
                 console.error(err);
             } finally {
                 hideLoader();
             }
         });
 
-        // Clear staging button
-        document.getElementById('ai-clear-staging-btn')?.addEventListener('click', () => {
-            if (confirm('Bạn có chắc chắn muốn xoá toàn bộ câu hỏi đang soạn thảo?')) {
-                aiStagingQuestions = [];
-                renderStagingQuestions();
-                document.getElementById('ai-preview-container').style.display = 'none';
-            }
-        });
+        window.closeAiPreviewModal = function () {
+            const modal = document.getElementById('ai-preview-modal');
+            if (modal) modal.classList.remove('active');
+        };
 
         // Generate more button
         document.getElementById('ai-generate-more-btn')?.addEventListener('click', async () => {
@@ -4985,13 +5156,19 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             const modelName = document.getElementById('ai-model-select').value;
             const checkedBoxes = document.querySelectorAll('#ai-types-checkboxes input:checked');
             const selectedTypes = Array.from(checkedBoxes).map(cb => cb.value);
-            const geminiKey = localStorage.getItem('gemini_api_key');
+            const provider = document.getElementById('ai-provider-select')?.value || 'gemini';
+            const apiKey = aiApiKeys[provider];
 
-            if (!geminiKey) return alert('Thiếu Gemini API Key.');
+            if (!apiKey) return alert(`Thiếu ${provider.toUpperCase()} API Key.`);
 
             showLoader('AI đang soạn thêm câu hỏi mới...');
             try {
-                const newQuestions = await callGeminiToGenerate(topic, level, quantity, selectedTypes, geminiKey, modelName, aiStagingQuestions);
+                let newQuestions = [];
+                if (provider === 'gemini') {
+                    newQuestions = await callGeminiToGenerate(topic, level, quantity, selectedTypes, apiKey, modelName, aiStagingQuestions);
+                } else if (provider === 'chatgpt') {
+                    newQuestions = await callChatGPTToGenerate(topic, level, quantity, selectedTypes, apiKey, modelName, aiStagingQuestions);
+                }
                 if (newQuestions && newQuestions.length > 0) {
                     aiStagingQuestions = aiStagingQuestions.concat(newQuestions);
                     renderStagingQuestions();
@@ -5044,13 +5221,31 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 // Reset UI
                 aiStagingQuestions = [];
                 renderStagingQuestions();
-                document.getElementById('ai-preview-container').style.display = 'none';
+                closeAiPreviewModal();
 
-                // Reload list in main panel if the selected exam matches the active one
-                const currentSelectedExam = document.getElementById('qbm-exam-select').value;
-                if (currentSelectedExam === examId) {
+                // Auto-switch to Question Manager tab and load the imported exam
+                const tabQuestionsBtn = document.getElementById('tab-questions-btn');
+                const tabQuestionsContent = document.getElementById('tab-questions-content');
+                const allTabBtns = document.querySelectorAll('.admin-tab-btn');
+                const allTabContents = ['tab-exams-content','tab-questions-content','tab-submissions-content','tab-games-content'].map(id => document.getElementById(id));
+                allTabBtns.forEach(b => b.classList.remove('active'));
+                allTabContents.forEach(c => { if (c) c.style.display = 'none'; });
+                if (tabQuestionsBtn) tabQuestionsBtn.classList.add('active');
+                if (tabQuestionsContent) tabQuestionsContent.style.display = 'block';
+
+                // Populate dropdown and select the imported exam, then load questions
+                await populateExamsDropdown();
+                const qbmSel = document.getElementById('qbm-exam-select');
+                if (qbmSel) {
+                    qbmSel.value = examId;
                     await loadQuestionBank();
                 }
+
+                // Update URL hash
+                const hashParams = new URLSearchParams();
+                hashParams.set('tab', 'questions');
+                hashParams.set('examId', examId);
+                history.replaceState(null, '', '#' + hashParams.toString());
             } catch (err) {
                 alert('Lỗi lưu câu hỏi: ' + err.message);
             } finally {
@@ -5061,18 +5256,34 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         });
 
         // Populate dynamic models dropdown at initialization
-        const initialKey = localStorage.getItem('gemini_api_key');
-        if (initialKey) {
-            populateAiModels(initialKey);
-        }
+        // Wait a small tick so elements are guaranteed to be in DOM
+        setTimeout(() => {
+            const providerSelect = document.getElementById('ai-provider-select');
+            if (providerSelect) {
+                providerSelect.addEventListener('change', () => {
+                    populateAiModels(providerSelect.value, aiApiKeys[providerSelect.value]);
+                });
+                // Trigger initial
+                populateAiModels(providerSelect.value, aiApiKeys[providerSelect.value]);
+            }
+        }, 100);
     }
 
-    async function populateAiModels(apiKey) {
+    async function populateAiModels(provider, apiKey) {
         const select = document.getElementById('ai-model-select');
         if (!select) return;
 
+        if (provider === 'chatgpt') {
+            select.innerHTML = `
+                <option value="gpt-4o-mini" selected>GPT-4o Mini (Default)</option>
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+            `;
+            return;
+        }
+
         if (!apiKey) {
-            select.innerHTML = '<option value="gemini-1.5-flash" selected>gemini-1.5-flash (Default)</option>';
+            select.innerHTML = '<option value="gemini-3.1-flash-lite" selected>Gemini 3.1 Flash Lite</option>';
             return;
         }
 
@@ -5092,7 +5303,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             console.error('Error fetching dynamic models list:', e);
             // Fallback to default hardcoded options
             select.innerHTML = `
-                <option value="gemini-1.5-flash" selected>1.5 Flash (Default)</option>
+                <option value="gemini-3.1-flash-lite" selected>Gemini 3.1 Flash Lite (Default)</option>
                 <option value="gemini-1.5-flash-latest">1.5 Flash (Latest)</option>
                 <option value="gemini-1.5-pro">1.5 Pro</option>
                 <option value="gemini-2.0-flash-exp">2.0 Flash Exp</option>
@@ -5271,6 +5482,151 @@ Chỉ trả về JSON hợp lệ, không trả về thêm bất kỳ văn bản 
         return parsed.questions || [];
     }
 
+    async function callChatGPTToGenerate(topic, level, quantity, selectedTypes, apiKey, modelName, existingQuestions = []) {
+        const typesExplanation = `
+Các dạng câu hỏi được phép sinh (chỉ sinh các dạng thuộc danh sách này: ${selectedTypes.join(', ')}):
+1. 'single_choice' (Trắc nghiệm 1 đáp án đúng): 
+   - option_a, option_b, option_c, option_d chứa các phương án lựa chọn (không được để trống).
+   - correct_answer: Ghi chính xác NỘI DUNG (TEXT) của phương án đúng (tuyệt đối KHÔNG ghi chữ cái A, B, C, D). Ví dụ nếu option_a là "goes", hãy ghi "goes".
+   - accepted_answers: Phải ghi mảng JSON chứa nội dung phương án đúng đó, ví dụ '["goes"]'.
+
+2. 'multiple_choice' (Trắc nghiệm nhiều đáp án đúng): 
+   - option_a, option_b, option_c, option_d chứa các phương án (không được để trống).
+   - correct_answer: Ghi chính xác NỘI DUNG (TEXT) của các phương án đúng cách nhau bởi dấu phẩy (tuyệt đối KHÔNG ghi chữ cái A, B, C, D). Ví dụ: 'goes, went'.
+   - accepted_answers: Phải là một mảng JSON chứa chính xác nội dung các phương án đúng, ví dụ '["goes", "went"]'.
+
+3. 'true_false' (Đúng/Sai): 
+   - option_a ghi "True", option_b ghi "False". option_c và option_d để trống "".
+   - correct_answer: Phải ghi "TRUE" hoặc "FALSE" (viết hoa toàn bộ).
+   - accepted_answers: Ghi mảng JSON tương ứng, ví dụ '["TRUE", "True", "true"]' hoặc '["FALSE", "False", "false"]'.
+
+4. 'fill_blank' (Điền từ vào ô trống):
+   - question_text: Phải chứa ít nhất một khoảng trống biểu diễn bằng "____" (4 dấu gạch dưới).
+   - correct_answer: Ghi từ đúng để điền vào ô trống, ví dụ "apple".
+   - accepted_answers: Phải ghi mảng JSON chứa từ đúng và các biến thể viết hoa/số nhiều được chấp nhận, ví dụ '["apple", "apples"]'.
+   - option_a, option_b, option_c, option_d để trống "".
+
+5. 'arrange_sentence' (Sắp xếp từ thành câu):
+   - question_text: Phải ghi CÂU HOÀN CHỈNH ĐÚNG (không ghi gợi ý hay dấu ngoặc vuông). Ví dụ: "She is reading a book." (Hệ thống sẽ tự động tách câu này ra thành các từ để học sinh sắp xếp).
+   - correct_answer: Phải ghi lại chính xác CÂU HOÀN CHỈNH ĐÚNG giống hệt question_text, ví dụ: "She is reading a book.".
+   - accepted_answers: Phải ghi mảng JSON chứa câu hoàn chỉnh đó, ví dụ: '["She is reading a book."]'.
+   - option_a, option_b, option_c, option_d để trống "".
+
+6. 'vocabulary' (Trắc nghiệm từ vựng):
+   - option_a, option_b, option_c, option_d chứa các phương án nghĩa hoặc từ đồng nghĩa.
+   - correct_answer: Ghi chính xác NỘI DUNG (TEXT) của phương án đúng (tuyệt đối KHÔNG ghi chữ cái A, B, C, D). Ví dụ: 'Person who teaches'.
+   - accepted_answers: Phải ghi mảng JSON chứa nội dung phương án đúng đó, ví dụ '["Person who teaches"]'.
+
+7. 'matching' (Nối cặp từ - định nghĩa):
+   - option_a, option_b, option_c, option_d chứa các cặp ghép ngăn cách bởi dấu gạch đứng "|", ví dụ: option_a: "cat | mèo", option_b: "dog | chó", option_c: "bird | chim", option_d: "fish | cá".
+   - correct_answer: Phải là một chuỗi JSON object map các từ bên trái với từ bên phải, ví dụ: '{"cat":"mèo", "dog":"chó", "bird":"chim", "fish":"cá"}'.
+   - accepted_answers: Phải ghi '[]'.
+
+8. 'short_answer' (Tự luận ngắn):
+   - question_text: Câu hỏi tự luận.
+   - correct_answer: Câu trả lời mẫu/đáp án mẫu chuẩn.
+   - accepted_answers: Phải ghi mảng JSON chứa các câu trả lời ngắn được hệ thống tự động chấm đúng, ví dụ: '["Hanoi", "Ha Noi"]', hoặc để trống '[]' nếu muốn giáo viên chấm thủ công.
+   - option_a, option_b, option_c, option_d để trống "".
+`;
+
+        let existingContext = '';
+        if (existingQuestions.length > 0) {
+            existingContext = `
+Dưới đây là các câu hỏi đã có, vui lòng KHÔNG tạo trùng lặp hoặc lặp lại nội dung của các câu hỏi này:
+${JSON.stringify(existingQuestions.map(q => q.question_text))}
+`;
+        }
+
+        const promptText = `
+Bạn là chuyên gia giáo dục tiếng Anh chuyên nghiệp. Hãy soạn ra ${quantity} câu hỏi tiếng Anh chất lượng cao.
+Chủ đề / Đoạn văn gốc: "${topic}"
+Độ khó: ${level}
+
+${typesExplanation}
+${existingContext}
+
+Hãy trả về kết quả dưới dạng một đối tượng JSON có thuộc tính duy nhất là "questions", chứa mảng các câu hỏi thỏa mãn cấu trúc trên.
+Ví dụ cấu trúc trả về:
+{
+  "questions": [
+    {
+      "type": "single_choice",
+      "level": "${level}",
+      "question_text": "...",
+      "option_a": "...",
+      "option_b": "...",
+      "option_c": "...",
+      "option_d": "...",
+      "correct_answer": "...",
+      "accepted_answers": "...",
+      "explanation": "..."
+    }
+  ]
+}
+Chỉ trả về JSON hợp lệ, không trả về thêm bất kỳ văn bản giải thích nào ngoài khối JSON.
+`;
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: modelName || 'gpt-4o-mini',
+                response_format: { type: "json_object" },
+                messages: [
+                    { role: "system", content: "You are a professional English educator and a helpful assistant designed to output strict JSON." },
+                    { role: "user", content: promptText }
+                ],
+                temperature: 0.7
+            })
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error?.message || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const jsonText = data.choices?.[0]?.message?.content;
+        if (!jsonText) {
+            throw new Error('ChatGPT API không trả về nội dung text.');
+        }
+
+        const extractJsonFromText = (text) => {
+            if (!text) return null;
+            let cleanText = text.trim();
+            if (cleanText.includes('```')) {
+                const match = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                if (match && match[1]) {
+                    cleanText = match[1].trim();
+                }
+            }
+            try {
+                return JSON.parse(cleanText);
+            } catch (e) {
+                const firstBrace = cleanText.indexOf('{');
+                const lastBrace = cleanText.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                    const potentialJson = cleanText.slice(firstBrace, lastBrace + 1);
+                    try {
+                        return JSON.parse(potentialJson);
+                    } catch (innerErr) {
+                        console.error('Brace extract failed:', potentialJson, innerErr);
+                    }
+                }
+                throw e;
+            }
+        };
+
+        const parsed = extractJsonFromText(jsonText);
+        if (!parsed || !parsed.questions) {
+            throw new Error('Dữ liệu JSON phản hồi không chứa thuộc tính "questions".');
+        }
+        return parsed.questions || [];
+    }
+
     function renderStagingQuestions() {
         const listContainer = document.getElementById('ai-staging-list');
         const countSpan = document.getElementById('ai-staging-count');
@@ -5302,14 +5658,14 @@ Chỉ trả về JSON hợp lệ, không trả về thêm bất kỳ văn bản 
 
             // Badge type
             const typeBadgeText = {
-                single_choice: 'MCQ 1 đáp án',
-                multiple_choice: 'MCQ nhiều đáp án',
-                true_false: 'Đúng/Sai',
-                fill_blank: 'Điền vào chỗ trống',
-                arrange_sentence: 'Sắp xếp câu',
-                vocabulary: 'Từ vựng',
-                matching: 'Nối cặp',
-                short_answer: 'Tự luận ngắn'
+                single_choice: 'Single Choice',
+                multiple_choice: 'Multiple Choice',
+                true_false: 'True / False',
+                fill_blank: 'Fill in the Blank',
+                arrange_sentence: 'Arrange Sentence',
+                vocabulary: 'Vocabulary',
+                matching: 'Matching',
+                short_answer: 'Short Answer'
             }[q.type] || q.type;
 
             // Build card safely using DOM manipulation to avoid HTML injection
@@ -5346,7 +5702,7 @@ Chỉ trả về JSON hợp lệ, không trả về thêm bất kỳ văn bản 
             headerDiv.style.cssText = 'display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f3f4f6; padding-bottom:0.5rem; margin-bottom:0.25rem;';
             const titleSpan = document.createElement('span');
             titleSpan.style.cssText = 'font-weight: 800; color: var(--primary); font-size:0.95rem;';
-            titleSpan.textContent = `Câu hỏi #${index + 1} `;
+            titleSpan.textContent = `Question #${index + 1} `;
             const badge = document.createElement('span');
             badge.style.cssText = 'font-weight: 600; font-size:0.8rem; background: var(--primary-light); color: var(--primary); padding: 0.15rem 0.5rem; border-radius: 9999px; margin-left: 0.5rem;';
             badge.textContent = typeBadgeText;
@@ -5355,13 +5711,16 @@ Chỉ trả về JSON hợp lệ, không trả về thêm bất kỳ văn bản 
             const delBtn = document.createElement('button');
             delBtn.className = 'ai-delete-card-btn';
             delBtn.dataset.index = String(index);
-            delBtn.style.cssText = 'background:none; border:none; color:var(--accent); font-size:1.1rem; cursor:pointer; font-weight:bold; display:flex; align-items:center; gap:0.25rem;';
-            delBtn.textContent = '\u{1F5D1}\uFE0F X\u00F3a';
+            delBtn.style.cssText = 'background:none; border:none; color:#ef4444; font-size:1.1rem; cursor:pointer; padding:0.25rem 0.4rem; border-radius:4px; display:flex; align-items:center; transition:background 0.15s;';
+            delBtn.innerHTML = '<i class="fa fa-trash" aria-label="Delete"></i>';
+            delBtn.title = 'Delete question';
+            delBtn.onmouseover = () => delBtn.style.background = '#fee2e2';
+            delBtn.onmouseout = () => delBtn.style.background = 'none';
             headerDiv.appendChild(delBtn);
             card.appendChild(headerDiv);
 
             // Question text (textarea)
-            card.appendChild(makeField('V\u0103n b\u1EA3n c\u00E2u h\u1ECFi:', 'question_text', true));
+            card.appendChild(makeField('Question Text:', 'question_text', true));
 
             // Options A-D for choice/vocabulary types
             if (['single_choice', 'multiple_choice', 'vocabulary'].includes(q.type)) {
@@ -5392,7 +5751,7 @@ Chỉ trả về JSON hợp lệ, không trả về thêm bất kỳ văn bản 
             if (q.type === 'matching') {
                 const grid = document.createElement('div');
                 grid.style.cssText = 'display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;';
-                const pairLabels = ['C\u1EB7p 1:', 'C\u1EB7p 2:', 'C\u1EB7p 3:', 'C\u1EB7p 4:'];
+                const pairLabels = ['Pair 1:', 'Pair 2:', 'Pair 3:', 'Pair 4:'];
                 const pairPlaceholders = ['cat | m\u00E8o', 'dog | ch\u00F3', 'bird | chim', 'fish | c\u00E1'];
                 ['a', 'b', 'c', 'd'].forEach((letter, i) => {
                     const row = document.createElement('div');
@@ -5419,15 +5778,15 @@ Chỉ trả về JSON hợp lệ, không trả về thêm bất kỳ văn bản 
             // Correct answer + accepted answers (2-col)
             const ansGrid = document.createElement('div');
             ansGrid.style.cssText = 'display:grid; grid-template-columns: 1fr 1fr; gap:1rem;';
-            ansGrid.appendChild(makeField('\u0110\u00E1p \u00E1n \u0111\u00FAng (Correct Answer):', 'correct_answer', false));
-            const acceptedWrapper = makeField('\u0110\u00E1p \u00E1n ph\u1EE5 (Accepted Answers JSON):', 'accepted_answers', false);
+            ansGrid.appendChild(makeField('Correct Answer:', 'correct_answer', false));
+            const acceptedWrapper = makeField('Accepted Answers (JSON):', 'accepted_answers', false);
             const acceptedInp = acceptedWrapper.querySelector('input');
             if (!acceptedInp.value) acceptedInp.value = '[]';
             ansGrid.appendChild(acceptedWrapper);
             card.appendChild(ansGrid);
 
             // Explanation
-            card.appendChild(makeField('Gi\u1EA3i th\u00EDch \u0111\u00E1p \u00E1n:', 'explanation', false));
+            card.appendChild(makeField('Explanation:', 'explanation', false));
 
             listContainer.appendChild(card);
         });
@@ -5439,7 +5798,7 @@ Chỉ trả về JSON hợp lệ, không trả về thêm bất kỳ văn bản 
                 aiStagingQuestions.splice(idx, 1);
                 renderStagingQuestions();
                 if (aiStagingQuestions.length === 0) {
-                    document.getElementById('ai-preview-container').style.display = 'none';
+                    closeAiPreviewModal();
                 }
             });
         });

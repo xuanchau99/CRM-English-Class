@@ -20,6 +20,8 @@ function doGet(e) {
         const submissionId = e.parameter.submissionId;
         if (!submissionId) throw new Error('submissionId parameter is required.');
         return createJsonResponse({ status: 'success', data: getSubmissionDetails(submissionId) });
+      case 'getAiKeys':
+        return createJsonResponse({ status: 'success', data: getAiKeys() });
       case 'healthCheck':
         return createJsonResponse({ status: 'OK', message: 'Apps Script is running.' });
       default:
@@ -59,6 +61,8 @@ function doPost(e) {
         return createJsonResponse(deleteGame(payload));
       case 'deleteSubmission':
         return createJsonResponse(deleteSubmission(payload));
+      case 'saveAiKeys':
+        return createJsonResponse(saveAiKeys(payload));
       default:
         throw new Error('Invalid action for POST request: ' + action);
     }
@@ -141,6 +145,51 @@ function getExams(teacherId) {
     return all.filter(function(e) { return String(e.teacher_id) === String(teacherId); });
   }
   return all;
+}
+
+// AI Keys management
+function ensureAiKeysSheet() {
+  let sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('AI Keys');
+  if (!sheet) {
+    sheet = SpreadsheetApp.openById(SPREADSHEET_ID).insertSheet('AI Keys');
+    sheet.appendRow(['Provider', 'ApiKey']);
+    // Setup initial data if needed
+  }
+  return sheet;
+}
+
+function getAiKeys() {
+  const sheet = ensureAiKeysSheet();
+  const rows = getRowsData(sheet);
+  const keys = {};
+  rows.forEach(r => {
+    if (r.Provider && r.ApiKey) {
+      keys[String(r.Provider).toLowerCase()] = String(r.ApiKey).trim();
+    }
+  });
+  return keys;
+}
+
+function saveAiKeys(payload) {
+  const sheet = ensureAiKeysSheet();
+  const existing = getRowsData(sheet);
+  
+  const updateKey = (provider, key) => {
+    const pStr = String(provider).toLowerCase();
+    const rowIndex = existing.findIndex(r => String(r.Provider).toLowerCase() === pStr);
+    
+    if (rowIndex >= 0) {
+      // +2 because data row 0 is spreadsheet row 2
+      sheet.getRange(rowIndex + 2, 2).setValue(key);
+    } else {
+      sheet.appendRow([provider, key]);
+    }
+  };
+  
+  if (payload.gemini !== undefined) updateKey('gemini', payload.gemini);
+  if (payload.chatgpt !== undefined) updateKey('chatgpt', payload.chatgpt);
+  
+  return { success: true };
 }
 
 function loginTeacher(payload) {

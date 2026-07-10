@@ -1102,10 +1102,14 @@ form button {
     right: 0;
     bottom: 0;
     background-color: rgba(15, 23, 42, 0.4);
-    display: flex;
+    display: none;
     justify-content: center;
     align-items: center;
     z-index: 100;
+}
+
+.modal.active {
+    display: flex;
 }
 
 .modal-content {
