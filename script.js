@@ -4464,9 +4464,9 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             if (responseData.status === 'success') {
                 statusDiv.className = 'sync-success';
                 if (responseData.message && responseData.message.toLowerCase().includes('local')) {
-                    statusDiv.innerHTML = `<span>💾 Đã lưu bài làm thành công trên thiết bị (Chế độ Ngoại tuyến).</span>`;
+                    statusDiv.innerHTML = `<span>💾 Đã lưu bài làm thành công trên thiết bị (Do có lỗi hệ thống).</span>`;
                 } else {
-                    statusDiv.innerHTML = `<span>✅ Kết quả đã đồng bộ thành công lên Server!</span>`;
+                    statusDiv.innerHTML = `<span>✅ Kết quả đã gởi cho Giáo viên!</span>`;
                 }
 
                 // Clear from pending submissions if it was there
