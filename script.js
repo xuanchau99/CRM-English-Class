@@ -21,6 +21,17 @@ const getUTC7ISOString = () => {
 
 
 document.addEventListener('DOMContentLoaded', () => {
+    let currentIsMobile = window.innerWidth <= 768;
+    window.addEventListener('resize', () => {
+        const newIsMobile = window.innerWidth <= 768;
+        if (newIsMobile !== currentIsMobile) {
+            currentIsMobile = newIsMobile;
+            if (window.currentExamState && window.currentExamState.exam && document.getElementById('exam-interface').style.display !== 'none') {
+                if (typeof loadExamInterface === 'function') loadExamInterface();
+            }
+        }
+    });
+
     // Inject Toast Container
     let toastContainer = document.createElement('div');
     toastContainer.className = 'bento-toast-container';
@@ -214,7 +225,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const useMock = localStorage.getItem('use_mock_db') === 'true';
             if (useMock) {
                 const allQs = JSON.parse(localStorage.getItem('mock_questions') || '[]');
-                return allQs.filter(q => String(q.exam_id) === String(examId) && q.is_deleted !== true && q.is_deleted !== 'TRUE' && q.is_deleted !== 1 && q.is_deleted !== '1');
+                let data = allQs.filter(q => String(q.exam_id) === String(examId) && q.is_deleted !== true && q.is_deleted !== 'TRUE' && q.is_deleted !== 1 && q.is_deleted !== '1');
+                data.forEach(q => {
+                    if (q.type === 'matching' && typeof q.correct_answer === 'string' && q.correct_answer.startsWith('{')) {
+                        try {
+                            const parsed = JSON.parse(q.correct_answer);
+                            q.question_text = Object.keys(parsed).join('\n');
+                            q.correct_answer = Object.values(parsed).join('\n');
+                        } catch (e) { }
+                    }
+                });
+                return data;
             }
             try {
                 const endpoint = localStorage.getItem('api_endpoint') || API_ENDPOINT;
@@ -226,7 +247,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     const filteredQs = allQs.filter(q => String(q.exam_id) !== String(examId));
                     const newCache = filteredQs.concat(result.data);
                     localStorage.setItem('mock_questions', JSON.stringify(newCache));
-                    return result.data.filter(q => q.is_deleted !== true && q.is_deleted !== 'TRUE' && q.is_deleted !== 1 && q.is_deleted !== '1');
+                    let data = result.data.filter(q => q.is_deleted !== true && q.is_deleted !== 'TRUE' && q.is_deleted !== 1 && q.is_deleted !== '1');
+                    data.forEach(q => {
+                        if (q.type === 'matching' && typeof q.correct_answer === 'string' && q.correct_answer.startsWith('{')) {
+                            try {
+                                const parsed = JSON.parse(q.correct_answer);
+                                q.question_text = Object.keys(parsed).join('\n');
+                                q.correct_answer = Object.values(parsed).join('\n');
+                            } catch (e) { }
+                        }
+                    });
+                    return data;
                 }
                 throw new Error(result.error || 'Failed to load questions.');
             } catch (error) {
@@ -1042,7 +1073,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
                 }
-            }).catch(() => {});
+            }).catch(() => { });
         } else if (hashState.tab === 'submissions') {
             switchTab(tabSubmissionsBtn, tabSubmissionsContent, 'submissions');
             loadSubmissionsExams();
@@ -1153,7 +1184,7 @@ Bạn có thể tự nhập tay hoặc dùng Excel nhập liệu hàng loạt.
 5. **Fill in Blank (\`fill_blank\`)**: Điền vào chỗ trống. Hệ thống dùng \`accepted_answers\` có định dạng danh sách JSON (Vd: \`["am", "'m"]\`) để học sinh gõ chữ vào. Chấm điểm rà soát tự động theo mảng JSON.
 6. **Arrange Sentence (\`arrange_sentence\`)**: Học sinh gõ lại cả câu hoàn chỉnh dựa trên từ gợi ý.
 7. **Short Answer (\`short_answer\`)**: Câu hỏi tự luận ngắn. Hệ thống sẽ *không* bắt buộc phải có đáp án đúng; giáo viên có thể chấm tay nếu tự luận đặc thù.
-8. **Matching (\`matching\`)**: Dạng kéo thả ghép nối theo cặp Key-Value. Chấp nhận JSON object ở \`accepted_answers\` như \`{"Cat":"Meow", "Dog":"Bark"}\`.
+8. **Matching (\`matching\`)**: Dạng kéo thả ghép nối. Cột trái (câu hỏi) nhập ở Question Text, cột phải (câu trả lời) nhập ở Correct Answer. Mỗi câu 1 dòng. Cả 2 cột phải có số dòng bằng nhau.
 
 ### Chỉnh sửa và Nhập Liệu Câu Hỏi
 - **Click vào "Manage Questions"** ở bảng Exams để mở giao diện quản lý câu hỏi của đề đó.
@@ -2669,12 +2700,12 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         },
         matching: {
             emoji: '🔗',
-            hint: 'Option A"key | value", B"key | value"... Correct Answer là JSON: {"cat":"mèo","dog":"chó"}. Có thể để trống để giáo viên chấm.',
-            optionALabel: 'Cặp 1', optionBLabel: 'Cặp 2', optionCLabel: 'Cặp 3', optionDLabel: 'Cặp 4',
-            optionAPlaceholder: 'VD: cat | mèo', optionBPlaceholder: 'VD: dog | chó', optionCPlaceholder: 'VD: bird | chim', optionDPlaceholder: 'VD: fish | cá',
-            correctPlaceholder: '{"cat":"mèo","dog":"chó"} (JSON) hoặc để trống',
-            acceptedPlaceholder: '{"cat":"mèo","dog":"chó"}',
-            showOptions: true, correctRequired: false
+            hint: 'Nhập list câu hỏi ở Question Text (mỗi câu 1 dòng). Nhập list câu trả lời tương ứng ở Correct Answer (mỗi câu 1 dòng). Số lượng dòng phải BẰNG nhau. ĐÃ ẨN CÁC Ô ĐÁP ÁN BÊN DƯỚI.',
+            optionALabel: '', optionBLabel: '', optionCLabel: '', optionDLabel: '',
+            optionAPlaceholder: '', optionBPlaceholder: '', optionCPlaceholder: '', optionDPlaceholder: '',
+            correctPlaceholder: 'VD: mèo\\nchó',
+            acceptedPlaceholder: '',
+            showOptions: false, correctRequired: true
         },
         short_answer: {
             emoji: '💬',
@@ -2813,17 +2844,16 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
                         <!-- Manual correct answer (for fill_blank, short_answer, matching, arrange_sentence) -->
                         <div id="answer-manual-area">
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+                            <div id="answer-manual-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
                                 <div>
                                     <div class="field-label-row">
                                         <label for="edit-correct" id="lbl-correct">Correct Answer</label>
-                                        ${mkTooltip('Đáp án đúng chính xác. Với matching: JSON {"key":"val"}. Với short_answer: có thể để trống.')}
+                                        ${mkTooltip('Đáp án đúng chính xác. Với matching: nhập list câu trả lời (mỗi đáp án 1 dòng) tương ứng với list câu hỏi ở trên. Với short_answer: có thể để trống.')}
                                     </div>
-                                    <input type="text" id="edit-correct" name="correct_answer"
-                                        value="${isEdit ? (q.correct_answer || '') : ''}" placeholder=""
-                                        style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);">
+                                    <textarea id="edit-correct" name="correct_answer" rows="3" placeholder=""
+                                        style="width:100%;border:2px solid var(--border-color);border-radius:var(--radius-sm);padding:0.6rem;box-sizing:border-box;font-family:var(--font);resize:vertical;">${isEdit ? (q.correct_answer || '') : ''}</textarea>
                                 </div>
-                                <div>
+                                <div id="accepted-answer-col">
                                     <div class="field-label-row">
                                         <label for="edit-accepted">Accepted Answers</label>
                                         ${mkTooltip('Các đáp án chấp nhận. Dạng JSON array: ["answer1","answer2"]. Dùng khi có nhiều cách viết đúng.')}
@@ -2905,6 +2935,19 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             const sectionAnswerWrapper = document.getElementById('section-answer-wrapper');
             if (sectionAnswerWrapper) {
                 sectionAnswerWrapper.style.display = (type === 'arrange_sentence') ? 'none' : 'block';
+            }
+
+            // Adjust manual answer grid for matching
+            const accCol = document.getElementById('accepted-answer-col');
+            const manualGrid = document.getElementById('answer-manual-grid');
+            if (accCol && manualGrid) {
+                if (type === 'matching') {
+                    accCol.style.display = 'none';
+                    manualGrid.style.gridTemplateColumns = '1fr';
+                } else {
+                    accCol.style.display = 'block';
+                    manualGrid.style.gridTemplateColumns = '1fr 1fr';
+                }
             }
             // Update option labels and placeholders
             if (cfg.showOptions) {
@@ -3305,17 +3348,18 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
             // Matching state
             if (q.type === 'matching') {
-                const leftItems = [];
-                const rightItems = [];
-                q.options.forEach(opt => {
-                    const parts = opt.split(/[:\-|]/);
-                    if (parts.length >= 2) {
-                        leftItems.push(parts[0].trim());
-                        rightItems.push(parts.slice(1).join(':').trim());
-                    }
-                });
+                const leftItems = (q.question_text || '').split('\n').map(s => s.trim()).filter(s => s);
+                const rightItems = (q.correct_answer || '').split('\n').map(s => s.trim()).filter(s => s);
                 window.currentExamState.matchingLeftItems[q.question_id] = leftItems;
                 window.currentExamState.matchingRightShuffled[q.question_id] = shuffleArray(rightItems);
+
+                // New interleaved format: combine all items with a type marker, then shuffle them together
+                const combined = [
+                    ...leftItems.map(text => ({ type: 'q', text })),
+                    ...rightItems.map(text => ({ type: 'a', text }))
+                ];
+                window.currentExamState.matchingPool = window.currentExamState.matchingPool || {};
+                window.currentExamState.matchingPool[q.question_id] = shuffleArray(combined);
             }
         });
 
@@ -3420,7 +3464,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 <div id="question-navigator-container" style="margin-bottom: 1.5rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                         <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-muted);">Question Navigator</h4>
-                        <button id="submit-now-btn" class="btn-primary" style="padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: 50px;">Submit Now</button>
+                        <button id="submit-now-btn" class="btn-primary" style="padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: var(--radius-pill);">Submit Now</button>
                     </div>
                     <div id="question-navigator" class="question-navigator">
                         ${questions.map((_, i) => `<div class="nav-circle" onclick="jumpToQuestion(${i})">${i + 1}</div>`).join('')}
@@ -3518,96 +3562,89 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
         } else if (question.type === 'vocabulary' || question.type === 'single_choice') {
             // Radio single-select mode
-            optionsHtml = '<div class="options-container">';
-            question.options.forEach(option => {
-                const isSelected = studentAnswer === option;
-                optionsHtml += `
-                    <div class="option ${isSelected ? 'selected' : ''}" 
-                         onclick="handleOptionSelect('${escapeSingleQuotes(option)}')">
-                        ${option}
-                    </div>`;
-            });
-            optionsHtml += '</div>';
-
-        } else if (question.type === 'true_false') {
-            optionsHtml = '<div class="options-container">';
-            ['True', 'False'].forEach(option => {
-                const isSelected = studentAnswer === option;
-                optionsHtml += `
-                    <div class="option ${isSelected ? 'selected' : ''}" 
-                         onclick="handleOptionSelect('${option}')">
-                        ${option}
-                    </div>`;
-            });
-            optionsHtml += '</div>';
-
-        } else if (question.type === 'fill_blank') {
-            optionsHtml = `
-                <div style="margin-top: 1rem;">
-                    <label for="blank-input" style="font-weight: 700; margin-bottom: 0.5rem; display: block; font-size: 0.95rem; color: var(--text-muted);">Your Answer:</label>
-                    <input type="text" id="blank-input" placeholder="Type your answer here..." 
-                           value="${studentAnswer || ''}" 
-                           oninput="handleTextAnswerSelect(this.value)"
-                           style="border-color: var(--primary);">
-                </div>
-            `;
-
-        } else if (question.type === 'arrange_sentence') {
-            const pool = window.currentExamState.shuffledPools[question.question_id] || [];
-            const arranged = window.currentExamState.arrangedAnswers[question.question_id] || [];
-
-            const arrangedBadges = arranged.map((word, idx) => `
-                <span class="word-badge" onclick="handleRemoveWord('${question.question_id}', ${idx})">${word}</span>
-            `).join('');
-
-            const poolBadges = pool.map((word, idx) => `
-                <span class="word-badge" onclick="handleAddWord('${question.question_id}', ${idx})">${word}</span>
-            `).join('');
-
-            optionsHtml = `
-                <div style="margin-top: 1rem;">
-                    <p style="font-weight:700; margin-bottom:0.5rem; font-size:0.95rem; color:var(--text-muted);">Workspace (Click word to remove):</p>
-                    <div class="word-workspace">
-                        ${arrangedBadges || '<span style="color:var(--text-muted); font-style:italic; font-size:0.95rem;">Workspace...</span>'}
-                    </div>
-                    <p style="font-weight:700; margin-bottom:0.5rem; font-size:0.95rem; color:var(--text-muted);">Word Pool (Click word to place in sentence):</p>
-                    <div class="word-pool">
-                        ${poolBadges || '<span style="color:var(--text-muted); font-style:italic; font-size:0.95rem;">Word pool empty...</span>'}
-                    </div>
-                </div>
-            `;
-
         } else if (question.type === 'matching') {
+            const isMobile = window.innerWidth <= 768;
             const leftItems = window.currentExamState.matchingLeftItems[question.question_id] || [];
-            const rightShuffled = window.currentExamState.matchingRightShuffled[question.question_id] || [];
+            let rightItems = window.currentExamState.matchingRightShuffled[question.question_id] || [];
 
-            let matchedObj = {};
             if (studentAnswer) {
                 try {
-                    matchedObj = JSON.parse(studentAnswer);
+                    const parsed = JSON.parse(studentAnswer);
+                    if (Array.isArray(parsed)) {
+                        // Data format is array of answers
+                        if (parsed.length === leftItems.length && (parsed.length === 0 || typeof parsed[0] === 'string')) {
+                            // Validate that these old answers actually belong to this question!
+                            const validAnswers = (question.correct_answer || '').split('\n').map(s => s.trim()).filter(s => s);
+                            let isValid = true;
+                            for (let ans of parsed) {
+                                if (ans && !validAnswers.includes(ans)) {
+                                    isValid = false; break;
+                                }
+                            }
+                            if (isValid) {
+                                rightItems = parsed;
+                            }
+                        }
+                    } else if (typeof parsed === 'object') {
+                        // Very old format: object map
+                        const validAnswers = (question.correct_answer || '').split('\n').map(s => s.trim()).filter(s => s);
+                        let isValid = true;
+                        for (let i = 0; i < leftItems.length; i++) {
+                            const ans = parsed[leftItems[i]];
+                            if (ans && !validAnswers.includes(ans)) {
+                                isValid = false; break;
+                            }
+                        }
+                        if (isValid) {
+                            rightItems = leftItems.map(l => parsed[l] || '');
+                        }
+                    }
                 } catch (e) { }
             }
 
-            optionsHtml = '<div class="matching-container">';
-            leftItems.forEach(left => {
-                const selectedRight = matchedObj[left] || '';
-                let selectOptions = `<option value="">-- Choose Match --</option>`;
-                rightShuffled.forEach(right => {
-                    selectOptions += `<option value="${escapeSingleQuotes(right)}" ${selectedRight === right ? 'selected' : ''}>${right}</option>`;
-                });
+            if (isMobile) {
+                // Mobile View: Interleaved
+                let pool = [];
+                for (let i = 0; i < leftItems.length; i++) {
+                    pool.push({ type: 'q', text: leftItems[i] });
+                    pool.push({ type: 'a', text: rightItems[i] || '' });
+                }
 
-                optionsHtml += `
-                    <div class="matching-row">
-                        <div class="matching-left">${left}</div>
-                        <div class="matching-right">
-                            <select onchange="handleMatchingSelect('${question.question_id}', '${escapeSingleQuotes(left)}', this.value)">
-                                ${selectOptions}
-                            </select>
+                optionsHtml = `
+                    <div class="matching-interleaved-container" style="margin-top:1rem;">
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem; font-style:italic;">💡 Arrange the boxes below so that the corresponding Question and Answer are next to each other (top-bottom or left-right).</p>
+                        <div id="sortable-interleaved-${question.question_id}" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:0.5rem; min-height:50px;">
+                            ${pool.map((item, idx) => `
+                                <div class="matching-interleaved-item" data-type="${item.type}" data-text="${escapeSingleQuotes(item.text)}" 
+                                     style="padding:0.5rem 0.75rem; border:2px solid ${item.type === 'q' ? '#c8bfe7' : '#f8c8d8'}; border-radius:var(--radius-sm); background:${item.type === 'q' ? '#f3f0f9' : '#fdf2f5'}; cursor:grab; display:flex; align-items:center; min-height:40px; font-weight:${item.type === 'q' ? '600' : '500'}; color:var(--text-main); font-size:0.9rem;">
+                                    <i class="fa fa-arrows-alt" style="margin-right:0.5rem;color:var(--text-muted);font-size:0.8rem;"></i>
+                                    <span style="flex:1">${item.text}</span>
+                                    <span style="font-size:0.6rem; padding:0.1rem 0.3rem; border-radius:4px; background:rgba(0,0,0,0.05); color:var(--text-muted); text-transform:uppercase;">${item.type === 'q' ? 'Q' : 'A'}</span>
+                                </div>
+                            `).join('')}
                         </div>
                     </div>
                 `;
-            });
-            optionsHtml += '</div>';
+            } else {
+                // Desktop View: Classic 2 Columns
+                optionsHtml = `
+                    <div class="matching-dnd-container" style="display:flex; flex-direction:row; flex-wrap:wrap; gap:1rem; margin-top:1rem; align-items:stretch;">
+                        <div class="matching-left-wrapper" style="flex:1; min-width:250px; display:flex; flex-direction:column; gap:0.5rem;">
+                            <h4 style="margin:0 0 0.25rem 0; font-size:1rem; color:var(--text-main); text-align:center;">A (Question)</h4>
+                            <div class="matching-left-col" style="display:flex; flex-direction:column; gap:0.5rem;">
+                                ${leftItems.map(left => `<div class="matching-left-item" style="padding:0.75rem; border:2px solid #c8bfe7; border-radius:var(--radius-sm); background:#f3f0f9; display:flex; align-items:center; min-height:50px; font-weight:600; color:var(--text-main);">${left}</div>`).join('')}
+                            </div>
+                        </div>
+                        <div class="matching-right-wrapper" style="flex:1; min-width:250px; display:flex; flex-direction:column; gap:0.5rem;">
+                            <h4 style="margin:0 0 0.25rem 0; font-size:1rem; color:var(--text-main); text-align:center;">B (Answer)</h4>
+                            <div class="matching-right-col" id="sortable-right-${question.question_id}" style="display:flex; flex-direction:column; gap:0.5rem; min-height:50px;">
+                                ${rightItems.map((right, idx) => `<div class="matching-right-item" data-val="${escapeSingleQuotes(right)}" style="padding:0.75rem; border:2px solid #f8c8d8; border-radius:var(--radius-sm); background:#fdf2f5; cursor:grab; display:flex; align-items:center; min-height:50px; font-weight:500; color:var(--text-main);"><i class="fa fa-arrows-alt-v" style="margin-right:0.5rem;color:var(--text-muted)"></i> ${right}</div>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.75rem; font-style:italic;">💡 Drag & Drop items in column B (Answer) to match the corresponding column A.</p>
+                `;
+            }
 
         } else if (question.type === 'short_answer') {
             optionsHtml = `
@@ -3626,7 +3663,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 <span class="badge badge-warning">${question.level}</span>
                 <span class="badge badge-accent">${question.points} Pt(s)</span>
             </div>
-            <p class="question-text">${question.type === "arrange_sentence" ? "Arrange the words to make a correct sentence:" : question.question_text}</p>
+            <p class="question-text">${question.type === "arrange_sentence" ? "Arrange the words to make a correct sentence:" : (question.type === "matching" ? "Match column A with column B correctly:" : question.question_text)}</p>
             ${optionsHtml}
         `;
 
@@ -3638,6 +3675,27 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         progressText.textContent = `Question ${currentQuestionIndex + 1} of ${questions.length}`;
 
         updateNavigationButtons();
+
+        // Initialize Sortable for Matching questions
+        if (question.type === 'matching') {
+            const sortableEl = document.getElementById(`sortable-interleaved-${question.question_id}`);
+            if (sortableEl && window.Sortable) {
+                window.Sortable.create(sortableEl, {
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    onEnd: function () {
+                        const items = sortableEl.querySelectorAll('.matching-interleaved-item');
+                        const currentOrder = Array.from(items).map(item => ({
+                            type: item.getAttribute('data-type'),
+                            text: item.getAttribute('data-text')
+                        }));
+                        window.currentExamState.answers[currentQuestionIndex] = JSON.stringify(currentOrder);
+                        saveDraft();
+                        updateNavigatorStatus();
+                    }
+                });
+            }
+        }
     }
 
     // Handles Option selection (MCQ multi-select, True/False single, Vocabulary single)
@@ -3696,25 +3754,6 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         renderCurrentQuestion();
     };
 
-    // Handles matching select dropdown shifts
-    window.handleMatchingSelect = function (questionId, leftItem, selectedRight) {
-        const state = window.currentExamState;
-        let matchedObj = {};
-        const currentAnswer = state.answers[state.currentQuestionIndex];
-        if (currentAnswer) {
-            try { matchedObj = JSON.parse(currentAnswer); } catch (e) { }
-        }
-
-        if (selectedRight === '') {
-            delete matchedObj[leftItem];
-        } else {
-            matchedObj[leftItem] = selectedRight;
-        }
-
-        state.answers[state.currentQuestionIndex] = JSON.stringify(matchedObj);
-        saveDraft();
-        window.updateNavigatorStatus();
-    };
 
     function nextQuestion() {
         if (window.currentExamState.currentQuestionIndex < window.currentExamState.questions.length - 1) {
@@ -3792,7 +3831,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     if (questions[index].type === 'matching') {
                         try {
                             const parsed = JSON.parse(ans);
-                            if (Object.keys(parsed).length > 0) isAnswered = true;
+                            if (Array.isArray(parsed)) {
+                                if (parsed.length > 0) isAnswered = true;
+                            } else if (Object.keys(parsed).length > 0) {
+                                isAnswered = true;
+                            }
                         } catch (e) { }
                     } else {
                         isAnswered = true;
@@ -3989,29 +4032,68 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     }
 
                 } else if (q.type === 'matching') {
-                    // Evaluate matches proportionally
-                    let correctPairs = 0;
-                    let totalPairs = 0;
+                    let parsedStudent = null;
+                    try { parsedStudent = JSON.parse(student_answer); } catch (e) { }
 
-                    let correctMap = {};
-                    try { correctMap = JSON.parse(correct_answer); } catch (e) { }
+                    if (Array.isArray(parsedStudent)) {
+                        const rightItems = (correct_answer || '').split('\n').map(s => s.trim()).filter(s => s);
+                        let isAllMatch = true;
 
-                    let studentMap = {};
-                    try { studentMap = JSON.parse(student_answer); } catch (e) { }
-
-                    const keys = Object.keys(correctMap);
-                    totalPairs = keys.length;
-
-                    keys.forEach(k => {
-                        if (normalizeAnswer(studentMap[k]) === normalizeAnswer(correctMap[k])) {
-                            correctPairs++;
+                        if (parsedStudent.length > 0 && typeof parsedStudent[0] === 'object' && parsedStudent[0].text !== undefined) {
+                            // New interleaved format: array of objects {type, text}
+                            const leftItems = (q.question_text || '').split('\n').map(s => s.trim()).filter(s => s);
+                            if (parsedStudent.length === 2 * rightItems.length && rightItems.length > 0) {
+                                for (let i = 0; i < parsedStudent.length; i += 2) {
+                                    const item1 = parsedStudent[i];
+                                    const item2 = parsedStudent[i + 1];
+                                    if (!item1 || !item2) { isAllMatch = false; break; }
+                                    let matchFound = false;
+                                    for (let j = 0; j < leftItems.length; j++) {
+                                        const L = leftItems[j];
+                                        const R = rightItems[j];
+                                        if (
+                                            (normalizeAnswer(item1.text) === normalizeAnswer(L) && normalizeAnswer(item2.text) === normalizeAnswer(R)) ||
+                                            (normalizeAnswer(item1.text) === normalizeAnswer(R) && normalizeAnswer(item2.text) === normalizeAnswer(L))
+                                        ) {
+                                            matchFound = true; break;
+                                        }
+                                    }
+                                    if (!matchFound) { isAllMatch = false; break; }
+                                }
+                            } else {
+                                isAllMatch = false;
+                            }
+                        } else if (parsedStudent.length === rightItems.length && rightItems.length > 0) {
+                            // Old format: array of strings representing answers
+                            for (let i = 0; i < rightItems.length; i++) {
+                                if (normalizeAnswer(parsedStudent[i]) !== normalizeAnswer(rightItems[i])) {
+                                    isAllMatch = false;
+                                    break;
+                                }
+                            }
+                        } else {
+                            isAllMatch = false;
                         }
-                    });
 
-                    if (totalPairs > 0) {
-                        points_earned = (correctPairs / totalPairs) * points;
-                        if (correctPairs === totalPairs) {
+                        if (isAllMatch) {
                             is_correct = true;
+                            points_earned = points;
+                        }
+                    } else if (typeof parsedStudent === 'object' && parsedStudent !== null) {
+                        let correctMap = {};
+                        try { correctMap = JSON.parse(correct_answer); } catch (e) { }
+
+                        const keys = Object.keys(correctMap);
+                        let isAllMatch = true;
+                        for (let k of keys) {
+                            if (normalizeAnswer(parsedStudent[k]) !== normalizeAnswer(correctMap[k])) {
+                                isAllMatch = false;
+                                break;
+                            }
+                        }
+                        if (keys.length > 0 && isAllMatch) {
+                            is_correct = true;
+                            points_earned = points;
                         }
                     }
 
@@ -4099,7 +4181,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
                 try {
                     const parsed = JSON.parse(trimmed);
-                    if (Array.isArray(parsed)) return parsed.join(', ');
+                    if (Array.isArray(parsed)) return parsed.join(' | ');
                 } catch (e) { }
             }
             if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
@@ -4108,10 +4190,10 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     return Object.keys(parsed).map(k => `${k} ➜ ${parsed[k]}`).join(', ');
                 } catch (e) { }
             }
-            return ans;
+            return ans.replace(/\n/g, ' | ');
         }
-        if (Array.isArray(ans)) return ans.join(', ');
-        return String(ans);
+        if (Array.isArray(ans)) return ans.join(' | ');
+        return String(ans).replace(/\n/g, ' | ');
     }
 
     function displayResults(result) {
@@ -4170,20 +4252,117 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             let ansText = formatAnswerForDisplay(item.student_answer || 'Not Answered');
             let correctText = formatAnswerForDisplay(item.correct_answer);
 
+            let questionDisplay = `<p><strong>Q${index + 1}:</strong> ${item.question_text.replace(/\\n/g, '<br>')}</p>`;
+            let answerComparisonHtml = `
+                <div class="answer-comparison">
+                    <div class="ans-row student-ans ${isCorrect ? 'correct' : (needsReview ? '' : 'wrong')}">
+                        Your Answer: ${ansText}
+                    </div>
+                    ${!isCorrect && !needsReview ? `
+                    <div class="ans-row correct-ans">
+                        Correct Answer: ${correctText}
+                    </div>` : ''}
+                </div>
+            `;
+
+            if (item.question_type === 'matching') {
+                const leftItems = (item.question_text || '').split('\n').map(s => s.trim()).filter(s => s);
+                const rightCorrect = (item.correct_answer || '').split('\n').map(s => s.trim()).filter(s => s);
+                let rightStudent = [];
+                try { rightStudent = JSON.parse(item.student_answer || '[]'); } catch (e) { }
+                if (!Array.isArray(rightStudent)) rightStudent = [];
+
+                questionDisplay = `<p><strong>Q${index + 1}:</strong> Arrange the boxes below to create matching pairs:</p>`;
+                let pairsHtml = `<div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.75rem;">`;
+
+                if (rightStudent.length > 0 && typeof rightStudent[0] === 'object' && rightStudent[0].text !== undefined) {
+                    // NEW FORMAT (Interleaved)
+                    if (rightStudent.length % 2 !== 0) {
+                        rightStudent.push({ type: 'a', text: '(Thiếu)' });
+                    }
+                    for (let i = 0; i < rightStudent.length; i += 2) {
+                        const item1 = rightStudent[i];
+                        const item2 = rightStudent[i + 1];
+
+                        let matchFound = false;
+                        for (let j = 0; j < leftItems.length; j++) {
+                            const L = leftItems[j];
+                            const R = rightCorrect[j];
+                            if (
+                                (normalizeAnswer(item1.text) === normalizeAnswer(L) && normalizeAnswer(item2.text) === normalizeAnswer(R)) ||
+                                (normalizeAnswer(item1.text) === normalizeAnswer(R) && normalizeAnswer(item2.text) === normalizeAnswer(L))
+                            ) {
+                                matchFound = true; break;
+                            }
+                        }
+                        const isPairCorrect = matchFound;
+
+                        pairsHtml += `
+                        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:stretch; margin-bottom:0.5rem; padding:0.5rem; border: 2px ${isPairCorrect ? 'solid var(--secondary)' : 'dashed #f43f5e'}; border-radius:var(--radius-sm); background:${isPairCorrect ? 'var(--secondary-light)' : 'var(--accent-light)'};">
+                            <div style="flex:1; min-width:200px; padding:0.5rem; background:rgba(255,255,255,0.7); border-radius:4px; display:flex; align-items:center; font-weight:600; color:var(--text-main); font-size:0.9rem;">
+                                <span style="font-size:0.6rem; margin-right:0.4rem; padding:0.1rem 0.3rem; border-radius:4px; background:rgba(0,0,0,0.05); color:var(--text-muted); text-transform:uppercase;">${item1.type}</span>
+                                ${item1.text}
+                            </div>
+                            <div style="flex:1; min-width:200px; padding:0.5rem; background:rgba(255,255,255,0.7); border-radius:4px; display:flex; align-items:center; font-weight:600; color:var(--text-main); font-size:0.9rem;">
+                                <span style="font-size:0.6rem; margin-right:0.4rem; padding:0.1rem 0.3rem; border-radius:4px; background:rgba(0,0,0,0.05); color:var(--text-muted); text-transform:uppercase;">${item2.type}</span>
+                                ${item2.text}
+                            </div>
+                            ${!isPairCorrect && !needsReview ? `
+                                <div style="flex:100%; font-size:0.85rem; color:var(--text-main); font-weight:600; padding:0.25rem 0.5rem; background:#fff; border-radius:4px; margin-top:0.25rem; border-left: 3px solid #f43f5e;">
+                                    ❌ Wrong pair.
+                                </div>` : ''}
+                        </div>`;
+                    }
+
+                    if (!isCorrect && !needsReview) {
+                        pairsHtml += `<div style="margin-top:1rem; padding:1rem; border:1px solid var(--border-color); border-radius:var(--radius-sm); background:var(--bg-page);">`;
+                        pairsHtml += `<h5 style="margin:0 0 0.5rem 0; color:var(--secondary-dark);">✅ Correct Answer:</h5>`;
+                        leftItems.forEach((left, i) => {
+                            pairsHtml += `<div style="margin-bottom:0.5rem; font-size:0.9rem; border-bottom:1px solid #eee; padding-bottom:0.25rem;">
+                                <div><span style="font-size:0.6rem; margin-right:0.4rem; padding:0.1rem 0.3rem; border-radius:4px; background:#f3f0f9; color:var(--text-muted);">Q</span> ${left}</div>
+                                <div style="margin-top:0.25rem;"><span style="font-size:0.6rem; margin-right:0.4rem; padding:0.1rem 0.3rem; border-radius:4px; background:#fdf2f5; color:var(--text-muted);">A</span> ${rightCorrect[i]}</div>
+                            </div>`;
+                        });
+                        pairsHtml += `</div>`;
+                    }
+                } else {
+                    // OLD FORMAT (Fixed A, Draggable B)
+                    leftItems.forEach((left, i) => {
+                        const stu = rightStudent[i] || '';
+                        const cor = rightCorrect[i] || '';
+                        const normStu = String(stu).trim().toLowerCase().replace(/\s+/g, ' ');
+                        const normCor = String(cor).trim().toLowerCase().replace(/\s+/g, ' ');
+                        const isPairCorrect = (normStu === normCor) && (normStu !== '');
+
+                        pairsHtml += `
+                            <div style="display:flex; flex-wrap:wrap; gap:1rem; align-items:stretch; margin-bottom:0.5rem;">
+                                <div style="flex:1; min-width:200px; padding:0.75rem; border:2px solid var(--border-color); border-radius:var(--radius-sm); background:var(--bg-card); display:flex; align-items:center; font-weight:600;">
+                                    ${left}
+                                </div>
+                                <div style="flex:1; min-width:200px; display:flex; flex-direction:column; gap:0.25rem;">
+                                    <div style="flex:1; padding:0.75rem; border:2px ${isPairCorrect ? 'solid var(--secondary)' : 'dashed #f43f5e'}; border-radius:var(--radius-sm); background:${isPairCorrect ? 'var(--secondary-light)' : 'var(--accent-light)'}; display:flex; align-items:center; color:${isPairCorrect ? 'var(--secondary-dark)' : '#e11d48'}; font-weight:600;">
+                                        ${isPairCorrect ? '✅' : '❌'} ${stu || '(Chưa làm)'}
+                                    </div>
+                                    ${!isPairCorrect && !needsReview ? `
+                                    <div style="font-size:0.85rem; color:var(--secondary-dark); font-weight:600; padding:0.25rem 0.5rem; background:var(--secondary-light); border-radius:var(--radius-sm); margin-top:0.25rem;">
+                                        👉 Correct Answer: ${cor}
+                                    </div>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+
+                pairsHtml += `</div>`;
+                answerComparisonHtml = pairsHtml;
+            }
+
             detailsHtml += `
                 <div class="result-question ${cardClass}">
                     <span class="badge result-badge ${isCorrect ? 'badge-secondary' : (needsReview ? 'badge-warning' : 'badge-accent')}">${statusText}</span>
-                    <p><strong>Q${index + 1}:</strong> ${item.question_text}</p>
+                    ${questionDisplay}
                     
-                    <div class="answer-comparison">
-                        <div class="ans-row student-ans ${isCorrect ? 'correct' : (needsReview ? '' : 'wrong')}">
-                            Your Answer: ${ansText}
-                        </div>
-                        ${!isCorrect && !needsReview ? `
-                        <div class="ans-row correct-ans">
-                            Correct Answer: ${correctText}
-                        </div>` : ''}
-                    </div>
+                    ${answerComparisonHtml}
 
                     <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: var(--text-muted);">
                         Points Earned: ${item.points_earned} / ${item.points}
@@ -5227,7 +5406,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 const tabQuestionsBtn = document.getElementById('tab-questions-btn');
                 const tabQuestionsContent = document.getElementById('tab-questions-content');
                 const allTabBtns = document.querySelectorAll('.admin-tab-btn');
-                const allTabContents = ['tab-exams-content','tab-questions-content','tab-submissions-content','tab-games-content'].map(id => document.getElementById(id));
+                const allTabContents = ['tab-exams-content', 'tab-questions-content', 'tab-submissions-content', 'tab-games-content'].map(id => document.getElementById(id));
                 allTabBtns.forEach(b => b.classList.remove('active'));
                 allTabContents.forEach(c => { if (c) c.style.display = 'none'; });
                 if (tabQuestionsBtn) tabQuestionsBtn.classList.add('active');
@@ -5376,9 +5555,10 @@ Các dạng câu hỏi được phép sinh (chỉ sinh các dạng thuộc danh 
    - correct_answer: Ghi chính xác NỘI DUNG (TEXT) của phương án đúng (tuyệt đối KHÔNG ghi chữ cái A, B, C, D). Ví dụ: 'Person who teaches'.
    - accepted_answers: Phải ghi mảng JSON chứa nội dung phương án đúng đó, ví dụ '["Person who teaches"]'.
 
-7. 'matching' (Nối cặp từ - định nghĩa):
-   - option_a, option_b, option_c, option_d chứa các cặp ghép ngăn cách bởi dấu gạch đứng "|", ví dụ: option_a: "cat | mèo", option_b: "dog | chó", option_c: "bird | chim", option_d: "fish | cá".
-   - correct_answer: Phải là một chuỗi JSON object map các từ bên trái với từ bên phải, ví dụ: '{"cat":"mèo", "dog":"chó", "bird":"chim", "fish":"cá"}'.
+7. 'matching' (Nối cặp từ - định nghĩa / kéo thả ghép nối):
+   - question_text: Liệt kê các câu hỏi/từ ở cột trái, mỗi câu/từ trên 1 dòng mới (dùng ký tự xuống dòng \n). Ví dụ: "cat\ndog\nbird"
+   - correct_answer: Liệt kê các câu trả lời/nghĩa ở cột phải tương ứng với cột trái, mỗi câu/từ trên 1 dòng mới (dùng ký tự xuống dòng \n). Số lượng dòng ở đây phải BẰNG số lượng dòng của question_text. Ví dụ: "mèo\nchó\nchim"
+   - option_a, option_b, option_c, option_d để trống "".
    - accepted_answers: Phải ghi '[]'.
 
 8. 'short_answer' (Tự luận ngắn):
@@ -5704,14 +5884,14 @@ Chỉ trả về JSON hợp lệ, không trả về thêm bất kỳ văn bản 
             titleSpan.style.cssText = 'font-weight: 800; color: var(--primary); font-size:0.95rem;';
             titleSpan.textContent = `Question #${index + 1} `;
             const badge = document.createElement('span');
-            badge.style.cssText = 'font-weight: 600; font-size:0.8rem; background: var(--primary-light); color: var(--primary); padding: 0.15rem 0.5rem; border-radius: 9999px; margin-left: 0.5rem;';
+            badge.style.cssText = 'font-weight: 600; font-size:0.8rem; background: var(--primary-light); color: var(--primary); padding: 0.15rem 0.5rem; border-radius: var(--radius-pill); margin-left: 0.5rem;';
             badge.textContent = typeBadgeText;
             titleSpan.appendChild(badge);
             headerDiv.appendChild(titleSpan);
             const delBtn = document.createElement('button');
             delBtn.className = 'ai-delete-card-btn';
             delBtn.dataset.index = String(index);
-            delBtn.style.cssText = 'background:none; border:none; color:#ef4444; font-size:1.1rem; cursor:pointer; padding:0.25rem 0.4rem; border-radius:4px; display:flex; align-items:center; transition:background 0.15s;';
+            delBtn.style.cssText = 'background:none; border:none; color:#ef4444; font-size:1.1rem; cursor:pointer; padding:0.25rem 0.4rem; border-radius: var(--radius-sm); display:flex; align-items:center; transition:background 0.15s;';
             delBtn.innerHTML = '<i class="fa fa-trash" aria-label="Delete"></i>';
             delBtn.title = 'Delete question';
             delBtn.onmouseover = () => delBtn.style.background = '#fee2e2';
@@ -5747,42 +5927,20 @@ Chỉ trả về JSON hợp lệ, không trả về thêm bất kỳ văn bản 
                 card.appendChild(grid);
             }
 
-            // Matching pairs
-            if (q.type === 'matching') {
-                const grid = document.createElement('div');
-                grid.style.cssText = 'display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;';
-                const pairLabels = ['Pair 1:', 'Pair 2:', 'Pair 3:', 'Pair 4:'];
-                const pairPlaceholders = ['cat | m\u00E8o', 'dog | ch\u00F3', 'bird | chim', 'fish | c\u00E1'];
-                ['a', 'b', 'c', 'd'].forEach((letter, i) => {
-                    const row = document.createElement('div');
-                    row.style.cssText = 'display:flex; align-items:center; gap:0.5rem;';
-                    const lbl = document.createElement('strong');
-                    lbl.style.cssText = 'font-size:0.9rem; white-space:nowrap;';
-                    lbl.textContent = pairLabels[i];
-                    row.appendChild(lbl);
-                    const inp = document.createElement('input');
-                    inp.type = 'text';
-                    inp.className = 'ai-input-field';
-                    inp.dataset.field = `option_${letter}`;
-                    inp.dataset.index = String(index);
-                    inp.placeholder = pairPlaceholders[i];
-                    inp.style.cssText = 'flex:1; border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:0.35rem; font-family:var(--font);';
-                    const v = q[`option_${letter}`];
-                    inp.value = (v !== undefined && v !== null) ? String(v) : '';
-                    row.appendChild(inp);
-                    grid.appendChild(row);
-                });
-                card.appendChild(grid);
-            }
 
-            // Correct answer + accepted answers (2-col)
+            // Correct answer + accepted answers (2-col or 1-col)
             const ansGrid = document.createElement('div');
-            ansGrid.style.cssText = 'display:grid; grid-template-columns: 1fr 1fr; gap:1rem;';
-            ansGrid.appendChild(makeField('Correct Answer:', 'correct_answer', false));
-            const acceptedWrapper = makeField('Accepted Answers (JSON):', 'accepted_answers', false);
-            const acceptedInp = acceptedWrapper.querySelector('input');
-            if (!acceptedInp.value) acceptedInp.value = '[]';
-            ansGrid.appendChild(acceptedWrapper);
+            if (q.type === 'matching') {
+                ansGrid.style.cssText = 'display:grid; grid-template-columns: 1fr; gap:1rem;';
+                ansGrid.appendChild(makeField('Correct Answer:', 'correct_answer', true));
+            } else {
+                ansGrid.style.cssText = 'display:grid; grid-template-columns: 1fr 1fr; gap:1rem;';
+                ansGrid.appendChild(makeField('Correct Answer:', 'correct_answer', false));
+                const acceptedWrapper = makeField('Accepted Answers (JSON):', 'accepted_answers', false);
+                const acceptedInp = acceptedWrapper.querySelector('input');
+                if (!acceptedInp.value) acceptedInp.value = '[]';
+                ansGrid.appendChild(acceptedWrapper);
+            }
             card.appendChild(ansGrid);
 
             // Explanation
@@ -5825,6 +5983,7 @@ Chỉ trả về JSON hợp lệ, không trả về thêm bất kỳ văn bản 
         gradeExam
     };
 });
+
 
 
 

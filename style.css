@@ -34,6 +34,7 @@
     --border-color: #e6eaff;
     --radius: 24px;
     --radius-md: 28px;
+    --radius-sm: 16px;
     --radius-pill: 50px;
     --shadow-sm: 0 6px 20px rgba(143, 168, 255, 0.12);
     --shadow-md: 0 12px 35px rgba(143, 168, 255, 0.16);
@@ -303,7 +304,7 @@ form div.checkbox-wrapper {
 form input[type="checkbox"] {
     width: 20px;
     height: 20px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     border: 2px solid var(--border-color);
     cursor: pointer;
     accent-color: var(--primary);
@@ -400,7 +401,7 @@ form button {
 #progress-bar-container {
     width: 100%;
     background-color: #e2eaf0;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     margin-top: 0.75rem;
     height: 8px;
     overflow: hidden;
@@ -410,7 +411,7 @@ form button {
     width: 0%;
     height: 100%;
     background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -446,7 +447,7 @@ form button {
 
 .badge {
     padding: 0.25rem 0.75rem;
-    border-radius: 20px;
+    border-radius: var(--radius);
     font-size: 0.8rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -525,7 +526,7 @@ form button {
 
 /* Custom Checkbox for MCQ Option selector */
 .mc-checkbox .option::before {
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
 }
 
 .mc-checkbox .option.selected::before {
@@ -568,7 +569,7 @@ form button {
     background-color: white;
     border: 2px solid var(--border-color);
     padding: 0.5rem 1rem;
-    border-radius: 20px;
+    border-radius: var(--radius);
     cursor: pointer;
     font-weight: 700;
     user-select: none;
@@ -750,7 +751,7 @@ form button {
     color: white;
     border: none;
     padding: 0.4rem 0.85rem;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     font-family: var(--font);
     font-weight: 700;
     cursor: pointer;
@@ -958,7 +959,7 @@ form button {
 .delete-btn,
 .action-btn {
     padding: 0.4rem 0.8rem;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     border: none;
     font-family: var(--font);
     font-weight: 700;
@@ -1079,7 +1080,7 @@ form button {
 .preview-status {
     display: inline-block;
     padding: 0.25rem 0.5rem;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     font-size: 0.75rem;
     font-weight: 700;
 }
@@ -1422,7 +1423,7 @@ form button {
     background: var(--accent-light);
     color: #b45309;
     border: 1.5px solid rgba(255, 107, 138, 0.25);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 0.3rem 0.75rem;
     font-size: 0.82rem;
     font-weight: 700;
@@ -1476,7 +1477,7 @@ form button {
     background: #2d3a4a;
     color: #fff;
     text-align: left;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     padding: 0.55rem 0.8rem;
     position: absolute;
     z-index: 10000;
@@ -1644,7 +1645,7 @@ form button {
 
 .answer-btn-group .ans-btn {
     padding: 0.45rem 1rem;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     border: 2px solid var(--border-color);
     background: #fff;
     color: var(--text-main);
@@ -1671,7 +1672,7 @@ form button {
 
 .answer-btn-group .ans-btn-tf {
     padding: 0.45rem 1.25rem;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     border: 2px solid var(--border-color);
     background: #fff;
     color: var(--text-main);
@@ -1726,7 +1727,7 @@ form button {
     gap: 0.5rem;
     margin-bottom: 1.5rem;
     background: var(--bg-secondary);
-    border-radius: 16px;
+    border-radius: var(--radius-sm);
     padding: 0.4rem;
     border: 1.5px solid var(--border-color);
 }
@@ -1735,7 +1736,7 @@ form button {
     flex: 1;
     background: none;
     border: none;
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
     font-family: var(--font);
     font-size: 0.92rem;
     font-weight: 700;
@@ -1840,7 +1841,7 @@ form button {
     background: var(--primary-light);
     color: var(--primary);
     border: 1.5px solid rgba(91, 156, 246, 0.3);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     padding: 0.4rem 0.6rem;
     font-family: var(--font);
     font-size: 0.8rem;
@@ -1859,7 +1860,7 @@ form button {
     background: var(--secondary-light);
     color: #3a8a3a;
     border: 1.5px solid rgba(107, 203, 119, 0.3);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     padding: 0.4rem 0.6rem;
     font-family: var(--font);
     font-size: 0.8rem;
@@ -1917,7 +1918,7 @@ footer {
 
     .admin-tabs {
         flex-wrap: wrap;
-        border-radius: 20px;
+        border-radius: var(--radius);
     }
 
     .admin-tab-btn {
@@ -1987,7 +1988,7 @@ footer {
 .nav-circle {
     width: 35px;
     height: 35px;
-    border-radius: 50px;
+    border-radius: var(--radius-pill);
     background-color: var(--border-color);
     color: var(--text-color);
     display: flex;
