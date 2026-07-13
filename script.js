@@ -3004,7 +3004,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     }
                 } catch (e) { }
 
-                const currentVal = correctInput.value.trim();
+                let currentVals = correctInput.value.split(',').map(s => s.trim()).filter(Boolean);
+
                 mcGroup.querySelectorAll('.ans-btn').forEach(btn => {
                     const optKey = btn.dataset.key;
                     const optInput = document.getElementById(`edit-option-${optKey}`);
@@ -3014,7 +3015,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         if (optVal && acceptedVals.includes(optVal)) btn.classList.add('selected');
                         else btn.classList.remove('selected');
                     } else {
-                        if (currentVal && optVal === currentVal) btn.classList.add('selected');
+                        // Fallback to correct_answer string matching (handles comma-separated strings for multiple choice)
+                        if (currentVals.length > 0 && optVal && currentVals.includes(optVal)) btn.classList.add('selected');
                         else btn.classList.remove('selected');
                     }
                 });
@@ -3075,7 +3077,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     acceptedInput.value = JSON.stringify(values);
                     displayEl.textContent = `Đáp án: ${selected[0].dataset.key.toUpperCase()} — ${values[0]}`;
                 } else if (values.length > 1) {
-                    correctInput.value = values[0];
+                    correctInput.value = values.join(', ');
                     acceptedInput.value = JSON.stringify(values);
                     const labels = selected.map(b => b.dataset.key.toUpperCase()).join(', ');
                     displayEl.textContent = `Đáp án: ${labels} — ${values.join(', ')}`;
@@ -3690,12 +3692,22 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 `;
             }
 
+        } else if (question.type === 'fill_blank') {
+            optionsHtml = `
+                <div style="margin-top: 1rem;">
+                    <label for="fill-blank-input" style="font-weight: 700; margin-bottom: 0.5rem; display: block; font-size: 0.95rem; color: var(--text-muted);">Fill in the blank:</label>
+                    <input type="text" id="fill-blank-input" placeholder="Type your answer here..." 
+                           oninput="handleTextAnswerSelect(this.value)" value="${studentAnswer || ''}" 
+                           style="width: 100%; border: 2px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem; font-family: var(--font); font-size: 1rem;">
+                </div>
+            `;
         } else if (question.type === 'short_answer') {
             optionsHtml = `
                 <div style="margin-top: 1rem;">
                     <label for="short-answer-input" style="font-weight: 700; margin-bottom: 0.5rem; display: block; font-size: 0.95rem; color: var(--text-muted);">Your Response:</label>
                     <textarea id="short-answer-input" rows="4" placeholder="Write your paragraph/sentence..." 
-                              oninput="handleTextAnswerSelect(this.value)">${studentAnswer || ''}</textarea>
+                              oninput="handleTextAnswerSelect(this.value)"
+                              style="width: 100%; border: 2px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem; font-family: var(--font); font-size: 1rem; resize: vertical;">${studentAnswer || ''}</textarea>
                 </div>
             `;
         }
@@ -5095,133 +5107,93 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         ];
 
         const sampleRows = [
-            // 1. multiple_choice
+            // 1. short_answer
             {
-                type: 'multiple_choice',
+                type: 'short_answer',
                 level: 'medium',
-                question_text: 'Choose ALL correct verbs: She ___ to school.',
-                option_a: 'go',
-                option_b: 'goes',
-                option_c: 'went',
-                option_d: 'going',
-                correct_answer: 'goes, went',
-                accepted_answers: '["goes", "went"]',
-                explanation: "Could be present simple (goes) or past simple (went).",
-                points: 2,
-                tags: 'grammar',
-                active: 'TRUE'
+                question_text: "Change the following sentence into an interrogative form: 'You like playing soccer.'",
+                option_a: '', option_b: '', option_c: '', option_d: '',
+                correct_answer: 'Do you like playing soccer?',
+                accepted_answers: '["Do you like playing soccer?", "Do you like playing soccer"]',
+                explanation: "Sử dụng trợ động từ 'Do' vì chủ ngữ là 'You'.",
+                points: 1, tags: '', active: 'TRUE'
             },
-            // 2. single_choice
-            {
-                type: 'single_choice',
-                level: 'easy',
-                question_text: 'Choose ONE correct verb: She ___ to school every day.',
-                option_a: 'go',
-                option_b: 'goes',
-                option_c: 'went',
-                option_d: 'going',
-                correct_answer: 'goes',
-                accepted_answers: '["goes"]',
-                explanation: "In Present Simple, 'She' takes the verb ending in -es.",
-                points: 1,
-                tags: 'grammar;present-simple',
-                active: 'TRUE'
-            },
-            // 3. fill_blank
-            {
-                type: 'fill_blank',
-                level: 'easy',
-                question_text: 'Complete the sentence: My brother is ___ than me. (tall)',
-                option_a: '',
-                option_b: '',
-                option_c: '',
-                option_d: '',
-                correct_answer: 'taller',
-                accepted_answers: '["taller"]',
-                explanation: "Comparative form of 'tall' is 'taller'.",
-                points: 2,
-                tags: 'grammar;comparatives',
-                active: 'TRUE'
-            },
-            // 4. true_false
-            {
-                type: 'true_false',
-                level: 'easy',
-                question_text: 'True or False: The sun rises in the west.',
-                option_a: '',
-                option_b: '',
-                option_c: '',
-                option_d: '',
-                correct_answer: 'FALSE',
-                accepted_answers: '["False","false","FALSE"]',
-                explanation: 'The sun rises in the east.',
-                points: 1,
-                tags: 'general',
-                active: 'TRUE'
-            },
-            // 5. vocabulary
-            {
-                type: 'vocabulary',
-                level: 'easy',
-                question_text: "What is the meaning of the word 'teacher'?",
-                option_a: 'Student',
-                option_b: 'Doctor',
-                option_c: 'Person who teaches',
-                option_d: 'Engineer',
-                correct_answer: 'Person who teaches',
-                accepted_answers: '["Person who teaches"]',
-                explanation: 'A teacher is someone who teaches students.',
-                points: 2,
-                tags: 'vocabulary',
-                active: 'TRUE'
-            },
-            // 6. arrange_sentence
-            {
-                type: 'arrange_sentence',
-                level: 'medium',
-                question_text: 'We are learning English now .',
-                option_a: '',
-                option_b: '',
-                option_c: '',
-                option_d: '',
-                correct_answer: '',
-                accepted_answers: '',
-                explanation: 'Subject + be + V-ing + Object.',
-                points: 3,
-                tags: 'grammar',
-                active: 'TRUE'
-            },
-            // 7. matching
+            // 2. matching
             {
                 type: 'matching',
                 level: 'medium',
-                question_text: 'Match the animals with their Vietnamese meanings:',
-                option_a: 'cat | mèo',
-                option_b: 'dog | chó',
-                option_c: 'bird | chim',
-                option_d: 'fish | cá',
-                correct_answer: '{"cat":"mèo","dog":"chó","bird":"chim","fish":"cá"}',
-                accepted_answers: '{"cat":"mèo","dog":"chó","bird":"chim","fish":"cá"}',
-                explanation: 'Match each English word with its translation.',
-                points: 4,
-                tags: 'vocabulary',
-                active: 'TRUE'
+                question_text: "He usually eats toast for breakfast.\nThey go to the cinema on Fridays.\nShe teaches English at this school.\nWe like to read books.",
+                option_a: '', option_b: '', option_c: '', option_d: '',
+                correct_answer: "He is in the habit of eating toast.\nThey visit the cinema weekly.\nHer job is to instruct students.\nReading is our hobby.",
+                accepted_answers: "[]",
+                explanation: "Nối các câu diễn đạt sự thật/thói quen tương ứng với ý nghĩa của chúng.",
+                points: 1, tags: '', active: 'TRUE'
             },
-            // 8. short_answer
+            // 3. vocabulary
             {
-                type: 'short_answer',
-                level: 'hard',
-                question_text: 'Describe what you do during English lessons in 1-2 sentences.',
-                option_a: '',
-                option_b: '',
-                option_c: '',
-                option_d: '',
-                correct_answer: '',
-                accepted_answers: '',
-                explanation: 'Graded manually by teacher.',
-                points: 5,
-                tags: 'writing',
-                active: 'TRUE'
+                type: 'vocabulary',
+                level: 'medium',
+                question_text: "Which adverb of frequency indicates that something happens 100% of the time?",
+                option_a: 'Sometimes', option_b: 'Always', option_c: 'Rarely', option_d: 'Never',
+                correct_answer: 'Always',
+                accepted_answers: '["Always"]',
+                explanation: "'Always' có nghĩa là luôn luôn (100% tần suất).",
+                points: 1, tags: '', active: 'TRUE'
+            },
+            // 4. arrange_sentence
+            {
+                type: 'arrange_sentence',
+                level: 'medium',
+                question_text: "They often visit their grandparents on Sundays.",
+                option_a: '', option_b: '', option_c: '', option_d: '',
+                correct_answer: 'They often visit their grandparents on Sundays.',
+                accepted_answers: '["They often visit their grandparents on Sundays."]',
+                explanation: 'Sắp xếp theo trật tự: S + trạng từ chỉ tần suất + V + O + cụm thời gian.',
+                points: 1, tags: '', active: 'TRUE'
+            },
+            // 5. fill_blank
+            {
+                type: 'fill_blank',
+                level: 'medium',
+                question_text: "Water ____ at 100 degrees Celsius.",
+                option_a: '', option_b: '', option_c: '', option_d: '',
+                correct_answer: 'boils',
+                accepted_answers: '["boils"]',
+                explanation: "Diễn tả một sự thật hiển nhiên/quy luật tự nhiên, dùng hiện tại đơn với chủ ngữ số ít.",
+                points: 1, tags: '', active: 'TRUE'
+            },
+            // 6. true_false
+            {
+                type: 'true_false',
+                level: 'medium',
+                question_text: "The sentence 'Do she speaks English?' is grammatically correct.",
+                option_a: 'true', option_b: 'false', option_c: '', option_d: '',
+                correct_answer: 'false',
+                accepted_answers: '["FALSE", "False", "false"]',
+                explanation: "Với 'does' đứng đầu câu, động từ phải ở dạng nguyên thể là 'speak'.",
+                points: 1, tags: '', active: 'TRUE'
+            },
+            // 7. multiple_choice
+            {
+                type: 'multiple_choice',
+                level: 'medium',
+                question_text: "Select the correct negative forms in the Present Simple tense:",
+                option_a: "He doesn't like apples.", option_b: "They don't playing football.", option_c: "She doesn't work here.", option_d: "I doesn't know him.",
+                correct_answer: "He doesn't like apples., She doesn't work here.",
+                accepted_answers: '["He doesn\'t like apples.", "She doesn\'t work here."]',
+                explanation: "Cấu trúc phủ định hiện tại đơn là S + do/does + not + V-inf.",
+                points: 1, tags: '', active: 'TRUE'
+            },
+            // 8. single_choice
+            {
+                type: 'single_choice',
+                level: 'medium',
+                question_text: "Choose the correct form of the verb: My father ____ to the office by bus every morning.",
+                option_a: 'go', option_b: 'goes', option_c: 'going', option_d: 'gone',
+                correct_answer: 'goes',
+                accepted_answers: '["goes"]',
+                explanation: "Với chủ ngữ số ít 'My father', động từ 'go' cần thêm 'es'.",
+                points: 1, tags: '', active: 'TRUE'
             }
         ];
 
