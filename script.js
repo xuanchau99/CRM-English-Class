@@ -3,7 +3,7 @@ const API_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzmrkmQbjI-cEpYn86
 let questionsToImport = [];
 let loadedQuestions = []; // Cached questions for the active admin exam
 let aiStagingQuestions = [];
-let aiApiKeys = { gemini: '', chatgpt: '' };
+let aiApiKeys = window.aiApiKeys = { gemini: '', chatgpt: '' };
 
 // Helper to escape single quotes in strings for onclick handlers
 const escapeSingleQuotes = (str) => {
@@ -5578,6 +5578,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             }
         }
     }
+    // Expose for E2E test runner access from outside iframe
+    window.populateAiModels = populateAiModels;
 
     async function callGeminiToGenerate(topic, level, quantity, selectedTypes, apiKey, modelName, existingQuestions = []) {
         const typesExplanation = `
