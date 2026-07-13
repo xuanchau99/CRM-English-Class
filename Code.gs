@@ -140,11 +140,35 @@ function ensureExamsHasTeacherIdColumn() {
 function getExams(teacherId) {
   ensureExamsHasTeacherIdColumn();
   const sheet = getSheet('Exams');
-  const all = getRowsData(sheet);
+  let allExams = getRowsData(sheet);
+  
   if (teacherId) {
-    return all.filter(function(e) { return String(e.teacher_id) === String(teacherId); });
+    allExams = allExams.filter(function(e) { return String(e.teacher_id) === String(teacherId); });
   }
-  return all;
+
+  // Pre-calculate question_count from Questions sheet
+  const qSheet = getSheet('Questions');
+  const allQuestions = getRowsData(qSheet);
+  const qCountMap = {};
+  
+  for (let i = 0; i < allQuestions.length; i++) {
+    const q = allQuestions[i];
+    // Ignore soft-deleted questions
+    if (q.is_deleted === true || q.is_deleted === 'TRUE' || q.is_deleted === '1') continue;
+    
+    const eid = String(q.exam_id || '');
+    if (eid) {
+      qCountMap[eid] = (qCountMap[eid] || 0) + 1;
+    }
+  }
+
+  // Inject question_count
+  for (let i = 0; i < allExams.length; i++) {
+    const eidStr = String(allExams[i].exam_id || '');
+    allExams[i].question_count = qCountMap[eidStr] || 0;
+  }
+  
+  return allExams;
 }
 
 // Auto-add created_at column to Questions sheet if missing

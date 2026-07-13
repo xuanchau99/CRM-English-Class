@@ -1443,16 +1443,16 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             ]);
             const exams = examsResponse.sort((a, b) => new Date(b.created_at || parseInt((b.exam_id || '').split('_').pop()) || 0) - new Date(a.created_at || parseInt((a.exam_id || '').split('_').pop()) || 0));
 
-            // Build question count map from local cache (populated when questions are loaded per exam)
+// Khôi phục bộ đếm câu hỏi cho trường hợp sử dụng Mock LocalStorage
             const questionCountMap = {};
             try {
                 const cachedQs = JSON.parse(localStorage.getItem('mock_questions') || '[]');
                 cachedQs.forEach(q => {
-                    if (q.is_deleted === true || q.is_deleted === 'TRUE' || q.is_deleted === '1' || q.is_deleted === 1) return;
+                    if (q.is_deleted === true || q.is_deleted === 'TRUE' || q.is_deleted === '1') return;
                     const eid = String(q.exam_id || '');
                     if (eid) questionCountMap[eid] = (questionCountMap[eid] || 0) + 1;
                 });
-            } catch (_) { /* ignore cache errors */ }
+            } catch (_) { }
 
             if (exams.length === 0) {
                 container.innerHTML = '<p class="info-message">No exams found. Click "Create New Exam" to create one!</p>';
@@ -1479,9 +1479,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
             exams.forEach((exam, idx) => {
                 const isActive = exam.active === true || exam.active === 'TRUE' || exam.active === '1' || exam.active === 1;
-                const formattedDate = exam.created_at ? new Date(exam.created_at).toLocaleString() : 'N/A';
+                const formattedDate = exam.created_at ? new Date(exam.created_at).toLocaleString('vi-VN') : 'Unknown';
                 const examStr = JSON.stringify(exam);
-                const qCount = questionCountMap[String(exam.exam_id)] || 0;
+                
+                // Use backend count if available, otherwise try local cache fallback
+                const qCount = exam.question_count !== undefined ? exam.question_count : (questionCountMap[String(exam.exam_id)] || 0);
 
                 table += `
                     <tr>
