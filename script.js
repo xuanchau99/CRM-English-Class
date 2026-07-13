@@ -2600,7 +2600,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             </div>`;
         }
 
-        const headers = ['Actions', 'No.', 'question_id', 'type', 'level', 'question_text', 'correct_answer', 'points'];
+        const headers = ['Actions', 'No.', 'question_id', 'type', 'level', 'question_text', 'correct_answer', 'points', 'created_at'];
 
         let table = bannerHtml + '<div class="table-responsive"><table class="data-table"><thead><tr>';
         headers.forEach(header => table += `<th>${header.replace(/_/g, ' ').toUpperCase()}</th>`);
@@ -2626,6 +2626,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             table += `<td class="question-text-cell" title="${(q.question_text || '').replace(/"/g, '&quot;')}">${q.question_text || ''}</td>`;
             table += `<td class="question-text-cell" title="${(q.correct_answer || '').replace(/"/g, '&quot;')}">${q.correct_answer || ''}</td>`;
             table += `<td>${q.points || '1'}</td>`;
+            const dateStr = q.created_at ? new Date(q.created_at).toLocaleString('vi-VN') : 'Unknown';
+            table += `<td style="font-size:0.8rem; color:var(--text-muted);">${dateStr}</td>`;
 
             table += `</tr>`;
         });

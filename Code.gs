@@ -88,7 +88,7 @@ function getSheet(sheetName) {
         sheet.appendRow(['username', 'password', 'name', 'phone']);
         break;
       case 'Questions':
-        sheet.appendRow(['question_id', 'exam_id', 'type', 'level', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer', 'accepted_answers', 'explanation', 'points', 'tags', 'active']);
+        sheet.appendRow(['question_id', 'exam_id', 'type', 'level', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_answer', 'accepted_answers', 'explanation', 'points', 'tags', 'active', 'created_at']);
         break;
       case 'Submissions':
         sheet.appendRow(['submission_id', 'exam_id', 'exam_title', 'student_id', 'student_name', 'class_name', 'score', 'total_points', 'percentage', 'correct_count', 'wrong_count', 'unanswered_count', 'manual_review_count', 'duration_seconds', 'submitted_at']);
@@ -146,6 +146,19 @@ function getExams(teacherId) {
   }
   return all;
 }
+
+// Auto-add created_at column to Questions sheet if missing
+function ensureQuestionsHasCreatedAtColumn() {
+  const sheet = getSheet('Questions');
+  const lastCol = sheet.getLastColumn();
+  if (lastCol === 0) return; // empty sheet
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  if (!headers.includes('created_at')) {
+    sheet.insertColumnAfter(lastCol);
+    sheet.getRange(1, lastCol + 1).setValue('created_at');
+  }
+}
+
 
 // AI Keys management
 function ensureAiKeysSheet() {
@@ -237,6 +250,7 @@ function saveExam(examPayload) {
 }
 
 function importQuestions(questionsPayload) {
+  ensureQuestionsHasCreatedAtColumn();
   const sheet = getSheet('Questions');
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const existingQuestions = getRowsData(sheet);
@@ -271,6 +285,11 @@ function importQuestions(questionsPayload) {
     // Check for duplicates within the payload itself
     if (questionsPayload.slice(0, i).some(q => q.exam_id === question.exam_id && q.question_id === question.question_id)) {
       throw new Error(`Row ${rowNum}: Duplicate question_id '${question.question_id}' found within the import file for exam '${question.exam_id}'.`);
+    }
+
+    // Auto-generate created_at if missing
+    if (!question.created_at) {
+       question.created_at = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd'T'HH:mm:ssXXX");
     }
 
     const newRow = [];
@@ -363,7 +382,8 @@ function editQuestion(qPayload) {
         if (strVal === 'false') value = false;
       } catch (e) {}
     }
-    updatedRow.push(value !== undefined ? value : '');
+    const valIndex = headers.indexOf(header);
+    updatedRow.push(value !== undefined ? value : rows[rowIndex - 1][valIndex]);
   }
   
   const range = sheet.getRange(rowIndex, 1, 1, headers.length);
