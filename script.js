@@ -3426,7 +3426,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 accepted = strVal.split(',').map(s => s.trim());
             }
         } else {
-            accepted = [String(decodedQ.correct_answer).trim()];
+            if (decodedQ.type === 'multiple_choice') {
+                accepted = String(decodedQ.correct_answer).split(',').map(s => s.trim()).filter(s => s);
+            } else {
+                accepted = [String(decodedQ.correct_answer).trim()];
+            }
         }
 
         return {
@@ -3560,8 +3564,44 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             });
             optionsHtml += '</div>';
 
-        } else if (question.type === 'vocabulary' || question.type === 'single_choice') {
+        } else if (question.type === 'vocabulary' || question.type === 'single_choice' || question.type === 'true_false') {
             // Radio single-select mode
+            optionsHtml = '<div class="options-container">';
+            const opts = question.type === 'true_false' ? ['True', 'False'] : question.options;
+            opts.forEach(option => {
+                const isSelected = studentAnswer === option;
+                optionsHtml += `
+                    <div class="option ${isSelected ? 'selected' : ''}" 
+                         onclick="handleOptionSelect('${escapeSingleQuotes(option)}')">
+                        ${option}
+                    </div>`;
+            });
+            optionsHtml += '</div>';
+
+        } else if (question.type === 'arrange_sentence') {
+            const pool = window.currentExamState.shuffledPools[question.question_id] || [];
+            const arranged = window.currentExamState.arrangedAnswers[question.question_id] || [];
+
+            const arrangedBadges = arranged.map((word, idx) => `
+                <span class="word-badge" onclick="handleRemoveWord('${question.question_id}', ${idx})">${word}</span>
+            `).join('');
+
+            const poolBadges = pool.map((word, idx) => `
+                <span class="word-badge" onclick="handleAddWord('${question.question_id}', ${idx})">${word}</span>
+            `).join('');
+
+            optionsHtml = `
+                <div style="margin-top: 1rem;">
+                    <p style="font-weight:700; margin-bottom:0.5rem; font-size:0.95rem; color:var(--text-muted);">Workspace (Click word to remove):</p>
+                    <div class="word-workspace">
+                        ${arrangedBadges || '<span style="color:var(--text-muted); font-style:italic; font-size:0.95rem;">Workspace...</span>'}
+                    </div>
+                    <p style="font-weight:700; margin-bottom:0.5rem; font-size:0.95rem; color:var(--text-muted);">Word Pool (Click word to place in sentence):</p>
+                    <div class="word-pool">
+                        ${poolBadges || '<span style="color:var(--text-muted); font-style:italic; font-size:0.95rem;">Word pool empty...</span>'}
+                    </div>
+                </div>
+            `;
         } else if (question.type === 'matching') {
             const isMobile = window.innerWidth <= 768;
             const leftItems = window.currentExamState.matchingLeftItems[question.question_id] || [];
@@ -3678,17 +3718,32 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
         // Initialize Sortable for Matching questions
         if (question.type === 'matching') {
-            const sortableEl = document.getElementById(`sortable-interleaved-${question.question_id}`);
-            if (sortableEl && window.Sortable) {
-                window.Sortable.create(sortableEl, {
+            const sortableElMobile = document.getElementById(`sortable-interleaved-${question.question_id}`);
+            if (sortableElMobile && window.Sortable) {
+                window.Sortable.create(sortableElMobile, {
                     animation: 150,
                     ghostClass: 'sortable-ghost',
                     onEnd: function () {
-                        const items = sortableEl.querySelectorAll('.matching-interleaved-item');
+                        const items = sortableElMobile.querySelectorAll('.matching-interleaved-item');
                         const currentOrder = Array.from(items).map(item => ({
                             type: item.getAttribute('data-type'),
                             text: item.getAttribute('data-text')
                         }));
+                        window.currentExamState.answers[currentQuestionIndex] = JSON.stringify(currentOrder);
+                        saveDraft();
+                        updateNavigatorStatus();
+                    }
+                });
+            }
+
+            const sortableElDesktop = document.getElementById(`sortable-right-${question.question_id}`);
+            if (sortableElDesktop && window.Sortable) {
+                window.Sortable.create(sortableElDesktop, {
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    onEnd: function () {
+                        const items = sortableElDesktop.querySelectorAll('.matching-right-item');
+                        const currentOrder = Array.from(items).map(item => item.getAttribute('data-val'));
                         window.currentExamState.answers[currentQuestionIndex] = JSON.stringify(currentOrder);
                         saveDraft();
                         updateNavigatorStatus();
@@ -3993,9 +4048,13 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     // Build accepted set from accepted_answers or correct_answer
                     let acceptedArr = [];
                     if (q.accepted_answers && q.accepted_answers.length > 0) {
-                        acceptedArr = q.accepted_answers.map(normalizeAnswer).sort();
+                        // Flatten: accepted_answers may be stored as ["He, She, It"] (single comma-joined string)
+                        // or ["He", "She", "It"] (individual items). Handle both cases.
+                        acceptedArr = q.accepted_answers
+                            .flatMap(a => String(a).split(',').map(s => s.trim()).filter(s => s))
+                            .map(normalizeAnswer).sort();
                     } else {
-                        acceptedArr = [normalizeAnswer(correct_answer)];
+                        acceptedArr = String(correct_answer).split(',').map(normalizeAnswer).sort();
                     }
                     if (JSON.stringify(studentArr) === JSON.stringify(acceptedArr)) {
                         is_correct = true;
