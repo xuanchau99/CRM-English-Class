@@ -719,6 +719,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            if (btn.disabled) return;
+            
             btn.disabled = true;
             btn.textContent = 'Đang đăng nhập...';
             errorEl.style.display = 'none';
@@ -3893,6 +3895,8 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     };
 
     function submitExam(isAutoSubmit = false) {
+        if (window.currentExamState && window.currentExamState.isSubmitting) return;
+        
         if (isAutoSubmit) {
             performActualSubmission();
             return;
@@ -3999,6 +4003,9 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
     };
 
     async function performActualSubmission() {
+        if (window.currentExamState && window.currentExamState.isSubmitting) return;
+        if (window.currentExamState) window.currentExamState.isSubmitting = true;
+        
         showLoader('Đang chấm điểm và gửi bài làm lên hệ thống...');
 
         try {
