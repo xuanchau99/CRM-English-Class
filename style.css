@@ -2158,3 +2158,121 @@ footer {
     white-space: nowrap;
     width: 90px;
 }
+
+/* Sticky Navigator Header */
+.sticky-navigator {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--surface-color, #ffffff);
+    padding: 1rem 0 1rem 0;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    /* add an outer margin/padding fix if container is tight */
+    margin-left: -1rem;
+    margin-right: -1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+/* Mobile Compact Sticky Exam Wrapper */
+@media (max-width: 900px) {
+
+    /* 1. Biến nấp Wrapper thành Card bao bọc mang style của exam-header */
+    .exam-mobile-sticky-wrapper {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background-color: var(--primary-light);
+        border-radius: 0 0 var(--radius) var(--radius);
+        margin: -1rem -1rem 1rem -1rem;
+        /* Kéo dãn ra sát mép màn hình điện thoại */
+        padding: 0.75rem 1rem 0.5rem 1rem;
+        box-shadow: 0 4px 15px rgba(77, 150, 255, 0.15);
+        border-bottom: 1px solid rgba(77, 150, 255, 0.15);
+    }
+
+    /* 2. Xóa nền của exam-header bên trong vì Wrapper đã gánh */
+    .exam-mobile-sticky-wrapper .exam-header {
+        background: transparent;
+        padding: 0;
+        border: none;
+        margin-bottom: 0.5rem;
+        border-radius: 0;
+        align-items: center;
+    }
+
+    /* 3. Ép Titile và Text nhỏ lại */
+    .exam-mobile-sticky-wrapper .exam-header h3 {
+        font-size: 1.1rem;
+        margin-bottom: 0.15rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 140px;
+    }
+
+    .exam-mobile-sticky-wrapper #progress-text {
+        font-size: 0.75rem;
+        margin-top: 0.15rem;
+    }
+
+    /* 4. Ép Timer nhỏ bé gọn gàng */
+    .exam-mobile-sticky-wrapper .exam-header #timer {
+        padding: 0.25rem 0.5rem;
+        font-size: 1rem;
+        min-width: 60px;
+        box-shadow: none;
+    }
+
+    .exam-mobile-sticky-wrapper #progress-bar-container {
+        margin-top: 0.15rem;
+        height: 6px;
+    }
+
+    /* 5. Gỡ bỏ style dư thừa của Sticky Navigator ban đầu */
+    .exam-mobile-sticky-wrapper .sticky-navigator {
+        position: static;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        border: none;
+    }
+
+    /* 6. Ẩn chữ dư & Thu nhỏ nút Submit */
+    .exam-mobile-sticky-wrapper .sticky-navigator h4 {
+        display: none !important;
+    }
+
+    .exam-mobile-sticky-wrapper #submit-now-btn {
+        padding: 0.25rem 0.8rem !important;
+        font-size: 0.8rem !important;
+    }
+
+    /* 7. Ép khối Viên Kẹo thành 1 thanh ngang trượt mượt mà (Horizontal Scroll) */
+    .exam-mobile-sticky-wrapper .question-navigator {
+        display: flex;
+        flex-wrap: nowrap;
+        /* Không cho rớt xuống nhiều hàng */
+        overflow-x: auto;
+        /* Trượt ngang nếu dài */
+        overflow-y: hidden;
+        gap: 0.35rem;
+        padding: 0.5rem 0.3rem;
+        /* Tránh sát thanh scrollbar */
+        max-height: 45px;
+    }
+
+    /* Ẩn scrollbar thanh kẹo cho đẹp, chỉ trên webkit */
+    .exam-mobile-sticky-wrapper .question-navigator::-webkit-scrollbar {
+        height: 0px;
+    }
+
+    /* Viên kẹo tí hon gọn gàng */
+    .exam-mobile-sticky-wrapper .nav-circle {
+        width: 25px;
+        height: 25px;
+        flex-shrink: 0;
+        font-size: 0.85rem;
+    }
+}

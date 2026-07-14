@@ -3461,23 +3461,24 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
 
         appContainer.innerHTML = `
             <div id="exam-interface">
-                <div class="exam-header">
-                    <div>
-                        <h3>${exam.title}</h3>
-                        <div id="progress-bar-container">
-                            <div id="progress-bar"></div>
+                <div class="exam-mobile-sticky-wrapper">
+                    <div class="exam-header">
+                        <div>
+                            <h3>${exam.title}</h3>
+                            <div id="progress-bar-container">
+                                <div id="progress-bar"></div>
+                            </div>
+                            <p id="progress-text">Question 1 of ${questions.length}</p>
                         </div>
-                        <p id="progress-text">Question 1 of ${questions.length}</p>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; justify-content: flex-end; flex-wrap: wrap;">
+                            <button id="submit-now-btn" class="btn-primary" style="padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: var(--radius-pill); white-space: nowrap;">Submit Now</button>
+                            <div id="timer">${durationMinutes}:00</div>
+                        </div>
                     </div>
-                    <div id="timer">${durationMinutes}:00</div>
-                </div>
-                <div id="question-navigator-container" style="margin-bottom: 1.5rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                        <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-muted);">Question Navigator</h4>
-                        <button id="submit-now-btn" class="btn-primary" style="padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: var(--radius-pill);">Submit Now</button>
-                    </div>
-                    <div id="question-navigator" class="question-navigator">
-                        ${questions.map((_, i) => `<div class="nav-circle" onclick="jumpToQuestion(${i})">${i + 1}</div>`).join('')}
+                    <div id="question-navigator-container" class="sticky-navigator">
+                        <div id="question-navigator" class="question-navigator">
+                            ${questions.map((_, i) => `<div class="nav-circle" onclick="jumpToQuestion(${i})">${i + 1}</div>`).join('')}
+                        </div>
                     </div>
                 </div>
                 <div id="question-container"></div>
@@ -3876,6 +3877,11 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             }
             if (isAnswered) circle.classList.add('answered');
             else circle.classList.remove('answered');
+            
+            // Auto scroll container so active circle is visible (only run over current)
+            if (index === currentQuestionIndex) {
+                circle.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+            }
         });
     };
 
@@ -4655,6 +4661,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             indicator.style.fontWeight = '800';
             indicator.style.zIndex = '999';
             indicator.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+            indicator.style.display = 'none';
             document.body.appendChild(indicator);
         }
 
