@@ -4401,83 +4401,47 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 questionDisplay = `<p><strong>Q${index + 1}:</strong> Arrange the boxes below to create matching pairs:</p>`;
                 let pairsHtml = `<div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.75rem;">`;
 
+                // If rightStudent is in mobile interleaved format (array of objects), map it to a simple string array in order of leftItems
+                let mappedStudent = rightStudent;
                 if (rightStudent.length > 0 && typeof rightStudent[0] === 'object' && rightStudent[0].text !== undefined) {
-                    // NEW FORMAT (Interleaved)
-                    if (rightStudent.length % 2 !== 0) {
-                        rightStudent.push({ type: 'a', text: '(Thiếu)' });
-                    }
-                    for (let i = 0; i < rightStudent.length; i += 2) {
-                        const item1 = rightStudent[i];
-                        const item2 = rightStudent[i + 1];
-
-                        let matchFound = false;
-                        for (let j = 0; j < leftItems.length; j++) {
-                            const L = leftItems[j];
-                            const R = rightCorrect[j];
-                            if (
-                                (normalizeAnswer(item1.text) === normalizeAnswer(L) && normalizeAnswer(item2.text) === normalizeAnswer(R)) ||
-                                (normalizeAnswer(item1.text) === normalizeAnswer(R) && normalizeAnswer(item2.text) === normalizeAnswer(L))
-                            ) {
-                                matchFound = true; break;
-                            }
+                    mappedStudent = leftItems.map(L => {
+                        const idx = rightStudent.findIndex(item => item && item.type === 'q' && normalizeAnswer(item.text) === normalizeAnswer(L));
+                        if (idx !== -1) {
+                            // Check next element
+                            const nextEl = rightStudent[idx + 1];
+                            if (nextEl && nextEl.type === 'a') return nextEl.text;
+                            // Check previous element
+                            const prevEl = rightStudent[idx - 1];
+                            if (prevEl && prevEl.type === 'a') return prevEl.text;
                         }
-                        const isPairCorrect = matchFound;
-
-                        pairsHtml += `
-                        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:stretch; margin-bottom:0.5rem; padding:0.5rem; border: 2px ${isPairCorrect ? 'solid var(--secondary)' : 'dashed #f43f5e'}; border-radius:var(--radius-sm); background:${isPairCorrect ? 'var(--secondary-light)' : 'var(--accent-light)'};">
-                            <div style="flex:1; min-width:200px; padding:0.5rem; background:rgba(255,255,255,0.7); border-radius:4px; display:flex; align-items:center; font-weight:600; color:var(--text-main); font-size:0.9rem;">
-                                <span style="font-size:0.6rem; margin-right:0.4rem; padding:0.1rem 0.3rem; border-radius:4px; background:rgba(0,0,0,0.05); color:var(--text-muted); text-transform:uppercase;">${item1.type}</span>
-                                ${item1.text}
-                            </div>
-                            <div style="flex:1; min-width:200px; padding:0.5rem; background:rgba(255,255,255,0.7); border-radius:4px; display:flex; align-items:center; font-weight:600; color:var(--text-main); font-size:0.9rem;">
-                                <span style="font-size:0.6rem; margin-right:0.4rem; padding:0.1rem 0.3rem; border-radius:4px; background:rgba(0,0,0,0.05); color:var(--text-muted); text-transform:uppercase;">${item2.type}</span>
-                                ${item2.text}
-                            </div>
-                            ${!isPairCorrect && !needsReview ? `
-                                <div style="flex:100%; font-size:0.85rem; color:var(--text-main); font-weight:600; padding:0.25rem 0.5rem; background:#fff; border-radius:4px; margin-top:0.25rem; border-left: 3px solid #f43f5e;">
-                                    ❌ Wrong pair.
-                                </div>` : ''}
-                        </div>`;
-                    }
-
-                    if (!isCorrect && !needsReview) {
-                        pairsHtml += `<div style="margin-top:1rem; padding:1rem; border:1px solid var(--border-color); border-radius:var(--radius-sm); background:var(--bg-page);">`;
-                        pairsHtml += `<h5 style="margin:0 0 0.5rem 0; color:var(--secondary-dark);">✅ Correct Answer:</h5>`;
-                        leftItems.forEach((left, i) => {
-                            pairsHtml += `<div style="margin-bottom:0.5rem; font-size:0.9rem; border-bottom:1px solid #eee; padding-bottom:0.25rem;">
-                                <div><span style="font-size:0.6rem; margin-right:0.4rem; padding:0.1rem 0.3rem; border-radius:4px; background:#f3f0f9; color:var(--text-muted);">Q</span> ${left}</div>
-                                <div style="margin-top:0.25rem;"><span style="font-size:0.6rem; margin-right:0.4rem; padding:0.1rem 0.3rem; border-radius:4px; background:#fdf2f5; color:var(--text-muted);">A</span> ${rightCorrect[i]}</div>
-                            </div>`;
-                        });
-                        pairsHtml += `</div>`;
-                    }
-                } else {
-                    // OLD FORMAT (Fixed A, Draggable B)
-                    leftItems.forEach((left, i) => {
-                        const stu = rightStudent[i] || '';
-                        const cor = rightCorrect[i] || '';
-                        const normStu = String(stu).trim().toLowerCase().replace(/\s+/g, ' ');
-                        const normCor = String(cor).trim().toLowerCase().replace(/\s+/g, ' ');
-                        const isPairCorrect = (normStu === normCor) && (normStu !== '');
-
-                        pairsHtml += `
-                            <div style="display:flex; flex-wrap:wrap; gap:1rem; align-items:stretch; margin-bottom:0.5rem;">
-                                <div style="flex:1; min-width:200px; padding:0.75rem; border:2px solid var(--border-color); border-radius:var(--radius-sm); background:var(--bg-card); display:flex; align-items:center; font-weight:600;">
-                                    ${left}
-                                </div>
-                                <div style="flex:1; min-width:200px; display:flex; flex-direction:column; gap:0.25rem;">
-                                    <div style="flex:1; padding:0.75rem; border:2px ${isPairCorrect ? 'solid var(--secondary)' : 'dashed #f43f5e'}; border-radius:var(--radius-sm); background:${isPairCorrect ? 'var(--secondary-light)' : 'var(--accent-light)'}; display:flex; align-items:center; color:${isPairCorrect ? 'var(--secondary-dark)' : '#e11d48'}; font-weight:600;">
-                                        ${isPairCorrect ? '✅' : '❌'} ${stu || '(Chưa làm)'}
-                                    </div>
-                                    ${!isPairCorrect && !needsReview ? `
-                                    <div style="font-size:0.85rem; color:var(--secondary-dark); font-weight:600; padding:0.25rem 0.5rem; background:var(--secondary-light); border-radius:var(--radius-sm); margin-top:0.25rem;">
-                                        👉 Correct Answer: ${cor}
-                                    </div>` : ''}
-                                </div>
-                            </div>
-                        `;
+                        return ''; // Unmatched
                     });
                 }
+
+                leftItems.forEach((left, i) => {
+                    const stu = mappedStudent[i] || '';
+                    const cor = rightCorrect[i] || '';
+                    const normStu = normalizeAnswer(stu);
+                    const normCor = normalizeAnswer(cor);
+                    const isPairCorrect = (normStu === normCor) && (normStu !== '');
+
+                    pairsHtml += `
+                        <div style="display:flex; flex-wrap:wrap; gap:1rem; align-items:stretch; margin-bottom:0.5rem;">
+                            <div style="flex:1; min-width:200px; padding:0.75rem; border:2px solid var(--border-color); border-radius:var(--radius-sm); background:var(--bg-card); display:flex; align-items:center; font-weight:600;">
+                                ${left}
+                            </div>
+                            <div style="flex:1; min-width:200px; display:flex; flex-direction:column; gap:0.25rem;">
+                                <div style="flex:1; padding:0.75rem; border:2px ${isPairCorrect ? 'solid var(--secondary)' : 'dashed #f43f5e'}; border-radius:var(--radius-sm); background:${isPairCorrect ? 'var(--secondary-light)' : 'var(--accent-light)'}; display:flex; align-items:center; color:${isPairCorrect ? 'var(--secondary-dark)' : '#e11d48'}; font-weight:600;">
+                                    ${isPairCorrect ? '✅' : '❌'} ${stu || '(Chưa làm)'}
+                                </div>
+                                ${!isPairCorrect && !needsReview ? `
+                                <div style="font-size:0.85rem; color:var(--secondary-dark); font-weight:600; padding:0.25rem 0.5rem; background:var(--secondary-light); border-radius:var(--radius-sm); margin-top:0.25rem;">
+                                    👉 Correct Answer: ${cor}
+                                </div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
 
                 pairsHtml += `</div>`;
                 answerComparisonHtml = pairsHtml;
@@ -5105,17 +5069,65 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     badgeClass = 'badge-accent';
                 }
 
-                let showCorrect = formatAnswerForDisplay(d.correct_answer);
-                let showStudent = formatAnswerForDisplay(d.student_answer);
+                let detailsContentHtml = '';
+                let displayPrompt = d.question_text;
 
-                html += `
-                    <div class="result-card" style="padding: 1.2rem; border-radius: var(--radius-md); ${borderStyle}">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.5rem;">
-                            <span style="font-weight:800; color:var(--text-main);">Question ${idx + 1} (${d.question_type})</span>
-                            <span class="badge ${badgeClass}">${badgeText} (${d.points_earned} / ${d.points} pt)</span>
-                        </div>
-                        <p style="margin: 0.5rem 0; font-weight:700; font-size:1.05rem;">${d.question_text}</p>
-                        
+                if (d.question_type === 'matching') {
+                    displayPrompt = 'Arrange the boxes below to create matching pairs:';
+                    const leftItems = (d.question_text || '').split('\n').map(s => s.trim()).filter(s => s);
+                    const rightCorrect = (d.correct_answer || '').split('\n').map(s => s.trim()).filter(s => s);
+                    let rightStudent = [];
+                    try { rightStudent = JSON.parse(d.student_answer || '[]'); } catch (e) { }
+                    if (!Array.isArray(rightStudent)) rightStudent = [];
+
+                    // If rightStudent is in mobile interleaved format (array of objects), map it to a simple string array in order of leftItems
+                    let mappedStudent = rightStudent;
+                    if (rightStudent.length > 0 && typeof rightStudent[0] === 'object' && rightStudent[0].text !== undefined) {
+                        mappedStudent = leftItems.map(L => {
+                            const idx = rightStudent.findIndex(item => item && item.type === 'q' && normalizeAnswer(item.text) === normalizeAnswer(L));
+                            if (idx !== -1) {
+                                // Check next element
+                                const nextEl = rightStudent[idx + 1];
+                                if (nextEl && nextEl.type === 'a') return nextEl.text;
+                                // Check previous element
+                                const prevEl = rightStudent[idx - 1];
+                                if (prevEl && prevEl.type === 'a') return prevEl.text;
+                            }
+                            return ''; // Unmatched
+                        });
+                    }
+
+                    let pairsHtml = `<div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.75rem;">`;
+                    leftItems.forEach((left, i) => {
+                        const stu = mappedStudent[i] || '';
+                        const cor = rightCorrect[i] || '';
+                        const normStu = normalizeAnswer(stu);
+                        const normCor = normalizeAnswer(cor);
+                        const isPairCorrect = (normStu === normCor) && (normStu !== '');
+
+                        pairsHtml += `
+                            <div style="display:flex; flex-wrap:wrap; gap:1rem; align-items:stretch; margin-bottom:0.5rem; text-align: left;">
+                                <div style="flex:1; min-width:200px; padding:0.75rem; border:2px solid var(--border-color); border-radius:var(--radius-sm); background:#fff; display:flex; align-items:center; font-weight:600; color:var(--text-main);">
+                                    ${left}
+                                </div>
+                                <div style="flex:1; min-width:200px; display:flex; flex-direction:column; gap:0.25rem;">
+                                    <div style="flex:1; padding:0.75rem; border:2px ${isPairCorrect ? 'solid var(--secondary)' : 'dashed #f43f5e'}; border-radius:var(--radius-sm); background:${isPairCorrect ? 'var(--secondary-light)' : 'var(--accent-light)'}; display:flex; align-items:center; color:${isPairCorrect ? 'var(--secondary-dark)' : '#e11d48'}; font-weight:600;">
+                                        ${isPairCorrect ? '✅' : '❌'} ${stu || '(Chưa làm)'}
+                                    </div>
+                                    ${!isPairCorrect && !needReview ? `
+                                    <div style="font-size:0.85rem; color:var(--secondary-dark); font-weight:600; padding:0.25rem 0.5rem; background:var(--secondary-light); border-radius:var(--radius-sm); margin-top:0.25rem;">
+                                        👉 Correct Answer: ${cor}
+                                    </div>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    pairsHtml += `</div>`;
+                    detailsContentHtml = pairsHtml;
+                } else {
+                    let showCorrect = formatAnswerForDisplay(d.correct_answer);
+                    let showStudent = formatAnswerForDisplay(d.student_answer);
+                    detailsContentHtml = `
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem; margin-top:0.75rem; font-size:0.95rem;">
                             <div style="background:rgba(255,255,255,0.7); padding:0.5rem; border-radius:var(--radius-sm);">
                                 <span style="color:var(--text-muted); font-size:0.8rem; display:block;">STUDENT ANSWER:</span>
@@ -5126,6 +5138,18 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                                 <strong style="color:#166534;">${showCorrect || '(N/A)'}</strong>
                             </div>
                         </div>
+                    `;
+                }
+
+                html += `
+                    <div class="result-card" style="padding: 1.2rem; border-radius: var(--radius-md); ${borderStyle}">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.5rem;">
+                            <span style="font-weight:800; color:var(--text-main);">Question ${idx + 1} (${d.question_type})</span>
+                            <span class="badge ${badgeClass}">${badgeText} (${d.points_earned} / ${d.points} pt)</span>
+                        </div>
+                        <p style="margin: 0.5rem 0; font-weight:700; font-size:1.05rem;">${displayPrompt}</p>
+                        
+                        ${detailsContentHtml}
                         ${d.explanation ? `<p style="margin: 0.75rem 0 0 0; font-size:0.85rem; color:var(--text-muted); font-style:italic;">💡 <strong>Explanation:</strong> ${d.explanation}</p>` : ''}
                     </div>
                 `;
