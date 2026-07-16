@@ -11,6 +11,16 @@ const escapeSingleQuotes = (str) => {
     return str.replace(/'/g, "\\'");
 };
 
+// Helper to escape HTML attributes safely without introducing backslashes
+const escapeHtmlAttr = (str) => {
+    if (typeof str !== 'string') return '';
+    return str.replace(/&/g, '&amp;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;');
+};
+
 // Helper for UTC+7 ISO String
 const getUTC7ISOString = () => {
     const date = new Date();
@@ -3659,12 +3669,18 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     pool.push({ type: 'a', text: rightItems[i] || '' });
                 }
 
+                // Initialize draft state if not set, so it's not null on submit
+                if (!studentAnswer) {
+                    window.currentExamState.answers[currentQuestionIndex] = JSON.stringify(pool);
+                    saveDraft();
+                }
+
                 optionsHtml = `
                     <div class="matching-interleaved-container" style="margin-top:1rem;">
                         <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem; font-style:italic;">💡 Arrange the boxes below so that the corresponding Question and Answer are next to each other (top-bottom or left-right).</p>
                         <div id="sortable-interleaved-${question.question_id}" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:0.5rem; min-height:50px;">
                             ${pool.map((item, idx) => `
-                                <div class="matching-interleaved-item" data-type="${item.type}" data-text="${escapeSingleQuotes(item.text)}" 
+                                <div class="matching-interleaved-item" data-type="${item.type}" data-text="${escapeHtmlAttr(item.text)}" 
                                      style="padding:0.5rem 0.75rem; border:2px solid ${item.type === 'q' ? '#c8bfe7' : '#f8c8d8'}; border-radius:var(--radius-sm); background:${item.type === 'q' ? '#f3f0f9' : '#fdf2f5'}; cursor:grab; display:flex; align-items:center; min-height:40px; font-weight:${item.type === 'q' ? '600' : '500'}; color:var(--text-main); font-size:0.9rem;">
                                     <i class="fa fa-arrows-alt" style="margin-right:0.5rem;color:var(--text-muted);font-size:0.8rem;"></i>
                                     <span style="flex:1">${item.text}</span>
@@ -3676,6 +3692,12 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 `;
             } else {
                 // Desktop View: Classic 2 Columns
+                // Initialize draft state if not set, so it's not null on submit
+                if (!studentAnswer) {
+                    window.currentExamState.answers[currentQuestionIndex] = JSON.stringify(rightItems);
+                    saveDraft();
+                }
+
                 optionsHtml = `
                     <div class="matching-dnd-container" style="display:flex; flex-direction:row; flex-wrap:wrap; gap:1rem; margin-top:1rem; align-items:stretch;">
                         <div class="matching-left-wrapper" style="flex:1; min-width:250px; display:flex; flex-direction:column; gap:0.5rem;">
@@ -3687,7 +3709,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                         <div class="matching-right-wrapper" style="flex:1; min-width:250px; display:flex; flex-direction:column; gap:0.5rem;">
                             <h4 style="margin:0 0 0.25rem 0; font-size:1rem; color:var(--text-main); text-align:center;">B (Answer)</h4>
                             <div class="matching-right-col" id="sortable-right-${question.question_id}" style="display:flex; flex-direction:column; gap:0.5rem; min-height:50px;">
-                                ${rightItems.map((right, idx) => `<div class="matching-right-item" data-val="${escapeSingleQuotes(right)}" style="padding:0.75rem; border:2px solid #f8c8d8; border-radius:var(--radius-sm); background:#fdf2f5; cursor:grab; display:flex; align-items:center; min-height:50px; font-weight:500; color:var(--text-main);"><i class="fa fa-arrows-alt-v" style="margin-right:0.5rem;color:var(--text-muted)"></i> ${right}</div>`).join('')}
+                                ${rightItems.map((right, idx) => `<div class="matching-right-item" data-val="${escapeHtmlAttr(right)}" style="padding:0.75rem; border:2px solid #f8c8d8; border-radius:var(--radius-sm); background:#fdf2f5; cursor:grab; display:flex; align-items:center; min-height:50px; font-weight:500; color:var(--text-main);"><i class="fa fa-arrows-alt-v" style="margin-right:0.5rem;color:var(--text-muted)"></i> ${right}</div>`).join('')}
                             </div>
                         </div>
                     </div>
@@ -4041,6 +4063,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
         return String(value)
             .trim()
             .toLowerCase()
+            .replace(/\\/g, '')
             .replace(/\s+/g, ' ')
             .replace(/[.!?]$/, '')
             .trim();
@@ -4269,7 +4292,22 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
             if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
                 try {
                     const parsed = JSON.parse(trimmed);
-                    if (Array.isArray(parsed)) return parsed.join(' | ');
+                    if (Array.isArray(parsed)) {
+                        if (parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0] !== null && parsed[0].text !== undefined) {
+                            const parts = [];
+                            for (let i = 0; i < parsed.length; i += 2) {
+                                const item1 = parsed[i];
+                                const item2 = parsed[i + 1];
+                                if (item1 && item2) {
+                                    parts.push(`${item1.text} ➜ ${item2.text}`);
+                                } else if (item1) {
+                                    parts.push(item1.text);
+                                }
+                            }
+                            return parts.join(' | ');
+                        }
+                        return parsed.join(' | ');
+                    }
                 } catch (e) { }
             }
             if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
