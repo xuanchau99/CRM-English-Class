@@ -8,8 +8,8 @@ export const Login = () => {
   const { showToast } = useNotification();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@gmail.com');
+  const [password, setPassword] = useState('123456');
   const [isLoading, setIsLoading] = useState(false);
 
   // Tránh việc đã login rồi vẫn vào trang này
