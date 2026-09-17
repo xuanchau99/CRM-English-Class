@@ -22,7 +22,8 @@ export const sendSubmissionNotification = async (credentials, params) => {
   }
 
   const templateParams = {
-    to_email:        toEmail,
+    email:           toEmail,
+    name:            'Admin',
     student_name:    studentName   || '(unknown)',
     class_name:      className     || '(unknown)',
     exam_title:      examTitle     || '(unknown)',
