@@ -260,20 +260,24 @@ export const ExamPlayer = () => {
       localStorage.removeItem(`exam_start_${examInfo.id}`);
 
       // Fire-and-forget: gửi email thông báo cho admin (không block UX học sinh)
-      studentRepository.getReceiveMail().then(receiveEmail => {
-        if (receiveEmail) {
-          sendSubmissionNotification({
-            toEmail:        receiveEmail,
-            studentName:    studentInfo.name,
-            className:      studentInfo.className,
-            examTitle:      examInfo.title,
-            examCode:       examCode,
-            score:          '(xem kết quả)',
-            percentage:     '(xem kết quả)',
-            correctCount:   '(xem kết quả)',
-            totalQuestions: questions.length,
-            submittedAt:    new Date().toLocaleString('vi-VN'),
-          });
+      studentRepository.getEmailSettings().then(emailSettings => {
+        if (emailSettings && emailSettings.receiveMail) {
+          sendSubmissionNotification(
+            {
+              serviceId:  emailSettings.serviceId,
+              templateId: emailSettings.templateId,
+              publicKey:  emailSettings.publicKey,
+            },
+            {
+              toEmail:        emailSettings.receiveMail,
+              studentName:    studentInfo.name,
+              className:      studentInfo.className,
+              examTitle:      examInfo.title,
+              examCode:       examCode,
+              totalQuestions: questions.length,
+              submittedAt:    new Date().toLocaleString('vi-VN'),
+            }
+          );
         }
       }).catch(() => { /* ignore email errors */ });
 

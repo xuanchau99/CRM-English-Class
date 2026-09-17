@@ -198,4 +198,27 @@ export const studentRepository = {
       return data.value;
     }
   },
+
+  // Lấy toàn bộ cấu hình EmailJS từ system_settings
+  getEmailSettings: async () => {
+    const { data } = await supabase
+      .from('system_settings')
+      .select('key, value')
+      .in('key', ['receive_mail', 'emailjs_service_id', 'emailjs_template_id', 'emailjs_public_key']);
+
+    if (!data || data.length === 0) return null;
+
+    const parse = (v) => {
+      if (typeof v === 'string' && v.startsWith('"') && v.endsWith('"')) return v.slice(1, -1);
+      return v || '';
+    };
+
+    const map = Object.fromEntries(data.map(d => [d.key, parse(d.value)]));
+    return {
+      receiveMail:    map['receive_mail'] || '',
+      serviceId:      map['emailjs_service_id'] || '',
+      templateId:     map['emailjs_template_id'] || '',
+      publicKey:      map['emailjs_public_key'] || '',
+    };
+  },
 };
