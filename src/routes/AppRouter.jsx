@@ -30,7 +30,7 @@ export const AppRouter = () => {
           <Route element={<AdminLayout />}>
             <Route index element={<Navigate to="/admin/exams" replace />} />
             <Route path="exams" element={<ExamManager />} />
-            <Route path="exams/:examId/questions" element={<QuestionManager />} />
+            <Route path="questions" element={<QuestionManager />} />
             <Route path="results" element={<ResultManager />} />
             <Route path="games" element={<GameManager />} />
             <Route path="settings" element={<Settings />} />

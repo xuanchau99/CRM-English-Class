@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/common/NotificationSystem';
-import { LoadingSpinner } from '../../components/common/LoadingSpinner';
-import { EmptyState } from '../../components/common/EmptyState';
 import { ExamFormModal } from '../../components/exam/ExamFormModal';
+import { PrintExamModal } from '../../components/question/PrintExamModal';
 import { examRepository } from '../../repositories/examRepository';
 
 export const ExamManager = () => {
@@ -11,6 +10,7 @@ export const ExamManager = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExam, setEditingExam] = useState(null);
+  const [printingExam, setPrintingExam] = useState(null);
   
   const { showToast } = useNotification();
   const navigate = useNavigate();
@@ -51,8 +51,8 @@ export const ExamManager = () => {
 
   const handleToggleActive = async (exam) => {
     try {
-      await examRepository.toggleActive(exam.id, exam.is_active);
-      showToast(`Đã ${exam.is_active ? 'Tắt' : 'Bật'} đề thi!`, 'success');
+      await examRepository.toggleActive(exam.id, !exam.is_active);
+      showToast(`Đã ${!exam.is_active ? 'Bật' : 'Tắt'} đề thi!`, 'success');
       fetchExams();
     } catch (error) {
       showToast('Lỗi khi đổi trạng thái: ' + error.message, 'error');
@@ -77,117 +77,93 @@ export const ExamManager = () => {
     showToast('Đã sao chép link làm bài!', 'success');
   };
 
-  const handlePrint = () => {
-    // Tạm thời mở menu in của browser, ở Phase 6 sẽ mở màn hình review câu hỏi để in đẹp hơn.
-    window.print();
+  const formatDate = (isoString) => {
+    const d = new Date(isoString);
+    return `${d.toLocaleTimeString('vi-VN')} ${d.toLocaleDateString('vi-VN')}`;
   };
 
-  if (loading) return <LoadingSpinner message="Đang tải danh sách đề thi..." />;
-
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-[#4a5c75]">Quản lý Đề thi</h2>
-        <button
-          onClick={() => {
-            setEditingExam(null);
-            setIsModalOpen(true);
-          }}
-          className="mt-4 sm:mt-0 bg-[#357ae8] text-white px-6 py-2.5 rounded-full font-bold shadow-md hover:bg-[#2b65c2] hover:shadow-lg transition-all"
-        >
+    <div id="tab-exams-content">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h3>All Exams</h3>
+        <button onClick={() => { setEditingExam(null); setIsModalOpen(true); }} className="btn-primary">
           + Create New Exam
         </button>
       </div>
-
-      {exams.length === 0 ? (
-        <EmptyState 
-          title="Chưa có đề thi nào" 
-          description="Bấm vào nút Create New Exam để tạo đề thi đầu tiên của bạn."
-        />
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200">
-          <table className="w-full text-left text-sm text-[#4a5c75]">
-            <thead className="bg-[#f1f5f9] text-[#64748b] font-bold uppercase text-xs">
+      
+      <div id="exams-table-container" className="data-table-container">
+        {loading ? (
+          <p className="loading-message">Loading exams list...</p>
+        ) : exams.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2rem' }}>
+            <p>Chưa có đề thi nào. Bấm "+ Create New Exam" để tạo.</p>
+          </div>
+        ) : (
+          <table className="data-table">
+            <thead>
               <tr>
-                <th className="px-6 py-4">No.</th>
-                <th className="px-6 py-4">Exam ID</th>
-                <th className="px-6 py-4">Title</th>
-                <th className="px-6 py-4">Duration</th>
-                <th className="px-6 py-4">Questions</th>
-                <th className="px-6 py-4 text-center">Active</th>
-                <th className="px-6 py-4">Created At</th>
-                <th className="px-6 py-4 text-center">Actions</th>
+                <th>NO.</th>
+                <th>EXAM ID</th>
+                <th>TITLE</th>
+                <th>DURATION</th>
+                <th>QUESTIONS</th>
+                <th>ACTIVE</th>
+                <th>CREATED AT</th>
+                <th>ACTIONS</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody>
               {exams.map((exam, index) => (
-                <tr key={exam.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-medium">{index + 1}</td>
-                  <td className="px-6 py-4 font-mono text-[#357ae8]">{exam.exam_code}</td>
-                  <td className="px-6 py-4 font-bold max-w-[200px] truncate" title={exam.title}>{exam.title}</td>
-                  <td className="px-6 py-4">{exam.duration_minutes} min</td>
-                  <td className="px-6 py-4">{exam.question_count}</td>
-                  <td className="px-6 py-4 text-center">
-                    <button
-                      onClick={() => handleToggleActive(exam)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        exam.is_active ? 'bg-green-500' : 'bg-gray-300'
-                      }`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        exam.is_active ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
+                <tr key={exam.id}>
+                  <td>{index + 1}</td>
+                  <td>{exam.exam_code}</td>
+                  <td>{exam.title}</td>
+                  <td>{exam.duration_minutes} mins</td>
+                  <td style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{exam.question_count}</td>
+                  <td>
+                    {exam.is_active ? (
+                      <span className="status-badge" style={{ backgroundColor: 'var(--mint-light)', color: '#059669', border: '1px solid var(--mint)', cursor: 'pointer' }} onClick={() => handleToggleActive(exam)}>ACTIVE</span>
+                    ) : (
+                      <span className="status-badge" style={{ backgroundColor: 'var(--danger-light)', color: 'var(--danger)', border: '1px solid #fca5a5', cursor: 'pointer' }} onClick={() => handleToggleActive(exam)}>INACTIVE</span>
+                    )}
+                  </td>
+                  <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{formatDate(exam.created_at)}</td>
+                  <td className="actions-cell">
+                    <button className="edit-btn" title="Edit Exam" onClick={() => { setEditingExam(exam); setIsModalOpen(true); }}>
+                      <i className="fa-solid fa-pen"></i>
                     </button>
-                  </td>
-                  <td className="px-6 py-4 text-gray-500">
-                    {new Date(exam.created_at).toLocaleDateString('vi-VN')}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <button 
-                        onClick={() => { setEditingExam(exam); setIsModalOpen(true); }}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit"
-                      >
-                        ✏️
-                      </button>
-                      <button 
-                        onClick={() => handleCopyLink(exam.exam_code)}
-                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Copy Link"
-                      >
-                        🔗
-                      </button>
-                      <button 
-                        onClick={() => navigate(`/admin/exams/${exam.id}/questions`)}
-                        className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors" title="Questions"
-                      >
-                        📋
-                      </button>
-                      <button 
-                        onClick={handlePrint}
-                        className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Print"
-                      >
-                        🖨️
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(exam.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete"
-                      >
-                        🗑️
-                      </button>
-                    </div>
+                    <button className="edit-btn" title="Copy Link" style={{ backgroundColor: 'var(--secondary)', color: 'white' }} onClick={() => handleCopyLink(exam.exam_code)}>
+                      <i className="fa-solid fa-link"></i> Link
+                    </button>
+                    <button className="edit-btn" title="Manage Questions" style={{ backgroundColor: 'var(--primary)', color: 'white' }} onClick={() => navigate('/admin/questions', { state: { examId: exam.id } })}>
+                      <i className="fa-solid fa-list-ul"></i> Questions
+                    </button>
+                    <button className="edit-btn" title="Print Exam" style={{ backgroundColor: '#002860', color: 'white' }} onClick={() => setPrintingExam(exam)}>
+                      <i className="fa-solid fa-print"></i>
+                    </button>
+                    <button className="delete-btn" title="Delete Exam" onClick={() => handleDelete(exam.id)}>
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      )}
+        )}
+      </div>
 
       <ExamFormModal 
         isOpen={isModalOpen}
         onClose={() => { setIsModalOpen(false); setEditingExam(null); }}
         onSave={handleSaveExam}
         initialData={editingExam}
+      />
+      
+      <PrintExamModal 
+        isOpen={!!printingExam}
+        onClose={() => setPrintingExam(null)}
+        examId={printingExam?.id}
+        examCodeProp={printingExam?.exam_code}
       />
     </div>
   );

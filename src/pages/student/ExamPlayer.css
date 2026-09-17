@@ -43,7 +43,7 @@
     --font: 'Nunito', sans-serif;
 }
 
-body {
+.exam-player-wrapper {
     font-family: var(--font);
     margin: 0;
     padding: 0;
@@ -54,7 +54,7 @@ body {
 }
 
 /* Header & Navigation */
-header {
+.exam-player-wrapper header {
     background: linear-gradient(135deg, var(--primary) 0%, #357ae8 100%);
     color: white;
     padding: 2rem 1rem;
@@ -128,7 +128,7 @@ nav button.active {
 }
 
 /* Main Container */
-main {
+.exam-player-wrapper main {
     padding: 2rem;
     margin: 2rem 6rem;
     background-color: var(--bg-card);
@@ -137,15 +137,13 @@ main {
     transition: var(--transition);
 }
 
-h2,
-h3,
-h4 {
+.exam-player-wrapper h2, .exam-player-wrapper h3, .exam-player-wrapper h4 {
     color: var(--text-main);
     font-weight: 800;
     margin-top: 0;
 }
 
-h2 {
+.exam-player-wrapper h2 {
     font-size: 1.8rem;
     border-bottom: 3px dashed var(--primary-light);
     padding-bottom: 0.75rem;
@@ -155,7 +153,7 @@ h2 {
     align-items: center;
 }
 
-h3 {
+.exam-player-wrapper h3 {
     font-size: 1.4rem;
     margin-top: 2rem;
     margin-bottom: 1rem;
@@ -175,7 +173,7 @@ button.btn-primary,
 form button[type="submit"] {
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
     color: white;
-    padding: 0.5rem 1.25rem;
+    padding: 0.85rem 1.75rem;
     border: none;
     border-radius: var(--radius-pill);
     cursor: pointer;
@@ -202,7 +200,7 @@ form button[type="submit"]:hover {
 button.btn-secondary {
     background-color: var(--primary-light);
     color: var(--primary);
-    padding: 0.5rem 1.25rem;
+    padding: 0.85rem 1.75rem;
     border: 2px solid transparent;
     border-radius: var(--radius-pill);
     cursor: pointer;
@@ -224,7 +222,7 @@ button.btn-secondary:active {
 button.btn-danger {
     background-color: var(--danger);
     color: white;
-    padding: 0.5rem 1.25rem;
+    padding: 0.85rem 1.75rem;
     border: 2px solid transparent;
     border-radius: var(--radius-pill);
     cursor: pointer;
@@ -1115,7 +1113,7 @@ form button {
 
 .modal-content {
     background-color: white;
-    padding: 1.5rem;
+    padding: 2.5rem;
     border-radius: calc(var(--radius) * 1.5);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
     max-width: 650px;
@@ -1129,19 +1127,13 @@ form button {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
     border-bottom: 2px dashed var(--border-color);
-    padding-bottom: 0.5rem;
+    padding-bottom: 0.75rem;
 }
 
-.modal-header h2,
-.modal-header h3,
-.modal-header h4 {
+.modal-header h3 {
     margin: 0;
-    padding: 0;
-    border: none;
-    font-size: 1.25rem;
-    line-height: 1.2;
 }
 
 .modal-close {
@@ -1165,12 +1157,6 @@ form button {
 }
 
 /* Beautiful custom input & select styles */
-input,
-select,
-textarea {
-    box-sizing: border-box;
-}
-
 #blank-input,
 #short-answer-input {
     width: 100%;
@@ -2287,117 +2273,4 @@ footer {
         flex-shrink: 0;
         font-size: 0.85rem;
     }
-}
-
-/* ═══════════════════════════════════════════════
-   ADMIN HEADER - Teacher Info Bar & Tabs
-═══════════════════════════════════════════════ */
-:root {
-    --bg-secondary: #f4f6ff;
-    --info: #0ea5e9;
-    --info-light: #e0f2fe;
-}
-
-.teacher-info-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    background: linear-gradient(135deg, var(--primary-light), var(--pink-light));
-    border: 1.5px solid rgba(91, 156, 246, 0.2);
-    border-radius: var(--radius-sm);
-    padding: 0.5rem 1rem;
-    font-size: 0.9rem;
-    font-weight: 700;
-    color: var(--text-main);
-    margin-bottom: 1.25rem;
-}
-
-.teacher-info-bar .teacher-avatar {
-    width: 40px;
-    height: 40px;
-    background: linear-gradient(135deg, var(--primary), var(--pink));
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 1rem;
-    font-weight: 800;
-    flex-shrink: 0;
-    overflow: hidden;
-}
-
-.teacher-info-bar .teacher-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 50%;
-}
-
-.teacher-info-bar .logout-btn {
-    margin-left: auto;
-    background: var(--accent-light);
-    color: #b45309;
-    border: 1.5px solid rgba(255, 107, 138, 0.25);
-    border-radius: var(--radius-sm);
-    padding: 0.3rem 0.75rem;
-    font-size: 0.82rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: var(--transition);
-    font-family: var(--font);
-}
-
-.teacher-info-bar .logout-btn:hover {
-    background: var(--accent);
-    color: white;
-}
-
-/* Pill-style Admin Tabs */
-.admin-tabs {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
-    background: var(--bg-secondary);
-    border-radius: var(--radius-sm);
-    padding: 0.4rem;
-    border: 1.5px solid var(--border-color);
-}
-
-.admin-tab-btn {
-    flex: 1;
-    background: none;
-    border: none;
-    border-radius: var(--radius-sm);
-    font-family: var(--font);
-    font-size: 0.92rem;
-    font-weight: 700;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 0.6rem 0.75rem;
-    transition: var(--transition);
-    white-space: nowrap;
-    outline: none;
-}
-
-.admin-tab-btn:hover {
-    background: rgba(91, 156, 246, 0.1);
-    color: var(--primary);
-}
-
-.admin-tab-btn.active {
-    background: #fff;
-    color: var(--primary);
-    box-shadow: 0 2px 10px rgba(91, 156, 246, 0.2);
-}
-
-/* Status badges */
-.status-badge {
-    display: inline-block;
-    padding: 0.2rem 0.6rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.78rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    cursor: pointer;
-}
+}.exam-player-wrapper { min-height: 100vh; }

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hướng Dẫn Triển Khai & Cài Đặt EnglishTools</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Nunito', sans-serif; }
+        .step-card { transition: all 0.2s ease-in-out; }
+        .step-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); border-color: #93c5fd; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="max-w-4xl mx-auto px-4 py-12">
+        
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[24px] p-8 md:p-12 text-white shadow-lg mb-12">
+            <h1 class="text-3xl md:text-5xl font-extrabold mb-4 tracking-tight">🚀 Hướng dẫn Cài đặt & Triển khai</h1>
+            <p class="text-blue-100 text-lg md:text-xl">Tài liệu hướng dẫn từng bước để chạy dự án EnglishTools trên máy tính cá nhân (Local), kết nối Database và đẩy lên môi trường thật (Vercel).</p>
+        </div>
+
+        <!-- Section 0: Supabase Setup -->
+        <div class="mb-12">
+            <div class="flex items-center gap-4 mb-6">
+                <span class="flex items-center justify-center w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 font-extrabold text-xl shadow-sm">0</span>
+                <h2 class="text-2xl font-bold text-gray-800">Khởi tạo Cơ sở dữ liệu (Supabase)</h2>
+            </div>
+            
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 step-card">
+                <p class="text-gray-600 mb-6">Dự án sử dụng Supabase làm Database chính. Trước khi chạy code, bạn phải khởi tạo một dự án Supabase mới.</p>
+                
+                <div class="space-y-4">
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold flex-shrink-0 mt-1">0.1</div>
+                        <div>
+                            <p class="font-semibold text-gray-800 mb-1">Đăng ký tài khoản</p>
+                            <p class="text-gray-600 text-sm">Truy cập <a href="https://supabase.com/" target="_blank" class="text-blue-500 font-bold hover:underline">Supabase.com</a> và đăng nhập bằng tài khoản Github của bạn.</p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold flex-shrink-0 mt-1">0.2</div>
+                        <div>
+                            <p class="font-semibold text-gray-800 mb-1">Tạo Dự án mới (New Project)</p>
+                            <p class="text-gray-600 text-sm mb-2">Bấm <strong>"New Project"</strong>. Nhập tên dự án (VD: <em>EnglishTools</em>), tạo <strong>Database Password</strong> (nhớ lưu lại mật khẩu này). Vùng (Region) nên chọn <strong>Singapore</strong> cho tốc độ nhanh nhất tại VN.</p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold flex-shrink-0 mt-1">0.3</div>
+                        <div>
+                            <p class="font-semibold text-gray-800 mb-1">Thiết lập Schema (Cấu trúc DB)</p>
+                            <p class="text-gray-600 text-sm mb-2">Sau khi dự án tạo xong (mất khoảng 2 phút). Ở Menu bên trái, chọn <strong>"SQL Editor"</strong> &rarr; <strong>"New Query"</strong>.</p>
+                            <p class="text-gray-600 text-sm">Trong thư mục code mà bạn tải về, hãy tìm thư mục <code>supabase/migrations/</code>. Lần lượt mở nội dung các file SQL (ví dụ: <code>0001_initial_schema.sql</code>, <code>0002...</code>), copy toàn bộ nội dung dán vào SQL Editor và nhấn <strong>RUN</strong> để tạo bảng dữ liệu.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 1: Run Local -->
+        <div class="mb-12">
+            <div class="flex items-center gap-4 mb-6">
+                <span class="flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-600 font-extrabold text-xl shadow-sm">1</span>
+                <h2 class="text-2xl font-bold text-gray-800">Hướng dẫn chạy Code ở Local (Máy cá nhân)</h2>
+            </div>
+            
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 step-card">
+                <h3 class="font-bold text-lg text-blue-700 mb-3">Yêu cầu hệ thống:</h3>
+                <ul class="list-disc pl-5 mb-6 text-gray-600 space-y-1">
+                    <li>Đã cài đặt <strong>Node.js</strong> (Phiên bản v18 trở lên). Tải tại: <a href="https://nodejs.org/" target="_blank" class="text-blue-500 hover:underline">nodejs.org</a></li>
+                    <li>Công cụ quản lý code: <strong>VS Code</strong>.</li>
+                </ul>
+
+                <h3 class="font-bold text-lg text-blue-700 mb-3">Các bước thực hiện:</h3>
+                <div class="space-y-4">
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold flex-shrink-0 mt-1">1.1</div>
+                        <div>
+                            <p class="font-semibold text-gray-800 mb-1">Cấu hình biến môi trường</p>
+                            <p class="text-gray-600 text-sm mb-2">Đổi tên file <code>.env.example</code> thành <code>.env</code> ở thư mục gốc của dự án. Sau đó mở file <code>.env</code> lên và điền 2 đoạn mã lấy từ dự án Supabase của bạn vào:</p>
+                            <pre class="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto">VITE_SUPABASE_URL=https://[ID_CUA_BAN].supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGci...[KEY_CUA_BAN]...</pre>
+                            <p class="text-xs text-gray-500 mt-2 italic">* Cách lấy: Đăng nhập Supabase &rarr; Chọn Project &rarr; Settings &rarr; API.</p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold flex-shrink-0 mt-1">1.2</div>
+                        <div>
+                            <p class="font-semibold text-gray-800 mb-1">Cài đặt thư viện</p>
+                            <p class="text-gray-600 text-sm mb-2">Mở Terminal trong thư mục dự án và chạy lệnh:</p>
+                            <pre class="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono inline-block">npm install</pre>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold flex-shrink-0 mt-1">1.3</div>
+                        <div>
+                            <p class="font-semibold text-gray-800 mb-1">Chạy ứng dụng</p>
+                            <p class="text-gray-600 text-sm mb-2">Khởi động máy chủ ảo (Dev Server):</p>
+                            <pre class="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono inline-block">npm run dev</pre>
+                            <p class="text-gray-600 text-sm mt-2">Truy cập vào link xuất hiện trên Terminal (Thường là <a href="http://localhost:5173" target="_blank" class="text-blue-500 font-bold hover:underline">http://localhost:5173</a>).</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 2: DBeaver -->
+        <div class="mb-12">
+            <div class="flex items-center gap-4 mb-6">
+                <span class="flex items-center justify-center w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 font-extrabold text-xl shadow-sm">2</span>
+                <h2 class="text-2xl font-bold text-gray-800">Kết nối Database Supabase bằng DBeaver</h2>
+            </div>
+            
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 step-card">
+                <p class="text-gray-600 mb-6">Bạn có thể quản trị cơ sở dữ liệu PostgreSQL của Supabase trực tiếp trên máy tính bằng phần mềm <strong>DBeaver</strong>.</p>
+                
+                <div class="space-y-4">
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold flex-shrink-0 mt-1">2.1</div>
+                        <div>
+                            <p class="font-semibold text-gray-800 mb-1">Lấy thông tin kết nối từ Supabase</p>
+                            <p class="text-gray-600 text-sm">Truy cập Supabase Dashboard &rarr; Project Settings (Bánh răng) &rarr; <strong>Database</strong>.<br/>Kéo xuống phần <strong>Connection parameters</strong>, bạn sẽ thấy thông tin:</p>
+                            <ul class="list-disc pl-5 mt-2 text-sm text-gray-600">
+                                <li><strong>Host:</strong> `aws-0-ap-southeast-1.pooler.supabase.com` (ví dụ)</li>
+                                <li><strong>Port:</strong> `6543` (hoặc `5432`)</li>
+                                <li><strong>Database:</strong> `postgres`</li>
+                                <li><strong>User:</strong> `postgres.xxxxx`</li>
+                                <li><strong>Password:</strong> (Mật khẩu bạn đặt lúc tạo Project).</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold flex-shrink-0 mt-1">2.2</div>
+                        <div>
+                            <p class="font-semibold text-gray-800 mb-1">Thiết lập trên DBeaver</p>
+                            <p class="text-gray-600 text-sm mb-2">1. Mở DBeaver &rarr; Chọn biểu tượng <strong>"New Database Connection"</strong> (Cái phích cắm góc trái trên cùng).<br/>2. Chọn cơ sở dữ liệu <strong>PostgreSQL</strong> &rarr; Next.<br/>3. Điền các thông số Host, Port, Database, Username và Password vừa lấy ở trên.<br/>4. Chuyển sang tab <strong>"SSL"</strong> và chọn SSL Mode là <strong>"require"</strong> (Bắt buộc với Supabase).<br/>5. Nhấn <strong>Test Connection</strong>. Nếu thành công, nhấn <strong>Finish</strong>.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 3: Vercel Deploy -->
+        <div>
+            <div class="flex items-center gap-4 mb-6">
+                <span class="flex items-center justify-center w-12 h-12 rounded-full bg-black text-white font-extrabold text-xl shadow-sm">3</span>
+                <h2 class="text-2xl font-bold text-gray-800">Hướng dẫn Đẩy code lên Vercel (Deploy)</h2>
+            </div>
+            
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 step-card">
+                
+                <div class="space-y-4">
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold flex-shrink-0 mt-1">3.1</div>
+                        <div>
+                            <p class="font-semibold text-gray-800 mb-1">Đẩy Code lên Github</p>
+                            <p class="text-gray-600 text-sm mb-2">Mở Terminal trong thư mục code và chạy các lệnh Git cơ bản:</p>
+                            <pre class="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto">git init
+git add .
+git commit -m "First release Phase 12"
+git branch -M main
+git remote add origin [LINK_GITHUB_REPO_CUA_BAN]
+git push -u origin main</pre>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold flex-shrink-0 mt-1">3.2</div>
+                        <div>
+                            <p class="font-semibold text-gray-800 mb-1">Triển khai (Deploy) trên Vercel</p>
+                            <p class="text-gray-600 text-sm mb-2">
+                                1. Đăng nhập <a href="https://vercel.com/dashboard" target="_blank" class="text-blue-500 hover:underline font-bold">Vercel.com</a> bằng tài khoản Github.<br/>
+                                2. Nhấn <strong>"Add New..." &rarr; "Project"</strong>.<br/>
+                                3. Tìm Repository `EnglishTools` vừa đẩy lên Github và nhấn <strong>"Import"</strong>.<br/>
+                                4. Vercel sẽ tự động nhận diện dự án là <strong>Vite</strong>. Đừng bấm Deploy vội!
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold flex-shrink-0 mt-1">3.3</div>
+                        <div>
+                            <p class="font-semibold text-gray-800 mb-1">Điền Biến môi trường (Environment Variables)</p>
+                            <p class="text-gray-600 text-sm mb-2">
+                                Trong màn hình cấu hình Import, mở rộng phần <strong>Environment Variables</strong>.<br/>
+                                Nhập chính xác 2 biến (Key - Value) y hệt như file <code>.env</code> ở bước 1.1:<br/>
+                                <code>VITE_SUPABASE_URL</code><br/>
+                                <code>VITE_SUPABASE_PUBLISHABLE_KEY</code>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold flex-shrink-0 mt-1">3.4</div>
+                        <div>
+                            <p class="font-semibold text-gray-800 mb-1">Hoàn tất</p>
+                            <p class="text-gray-600 text-sm mb-2">
+                                Bấm nút <strong>Deploy</strong> màu đen. Vercel sẽ tiến hành Build ứng dụng dựa trên cấu hình (bao gồm cả file <code>vercel.json</code> đã chuẩn bị sẵn để sửa lỗi SPA). Quá trình mất khoảng 1-2 phút.<br/>
+                                <strong>Xong!</strong> Bạn sẽ nhận được đường link Web công khai để chia sẻ cho học sinh và giáo viên.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>

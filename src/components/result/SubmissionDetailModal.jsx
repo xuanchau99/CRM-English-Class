@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { studentRepository } from '../../repositories/studentRepository';
-import { LoadingSpinner } from '../common/LoadingSpinner';
 
 export const SubmissionDetailModal = ({ isOpen, onClose, submissionId }) => {
   const [data, setData] = useState(null);
@@ -27,95 +26,114 @@ export const SubmissionDetailModal = ({ isOpen, onClose, submissionId }) => {
 
   if (!isOpen) return null;
 
+  const sub = data?.submission;
+  const details = data?.details || [];
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+    <div className="modal" style={{ display: 'flex', alignItems: 'flex-start', paddingTop: '3rem' }}>
+      <div className="modal-content" style={{ maxWidth: '860px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
         
-        {/* Header Modal */}
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-[#faf9ff] shrink-0">
-          <h2 className="text-xl font-bold text-[#4a5c75]">
-            Chi tiết bài làm
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-red-500 text-3xl leading-none transition-colors">×</button>
+        {/* Header */}
+        <div className="modal-header" style={{ padding: '1rem 1.25rem', marginBottom: 0, borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center' }}>
+          <h2 style={{ fontSize: '1.15rem', margin: 0 }}>👁️ Submission Details</h2>
+          <button className="modal-close" style={{ fontSize: '1.25rem', lineHeight: 1 }} onClick={onClose}>&times;</button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-6 overflow-y-auto flex-1 bg-gray-50">
+        {/* Body */}
+        <div style={{ padding: '1rem 1.25rem', overflowY: 'auto', flex: 1 }}>
           {loading ? (
-            <LoadingSpinner message="Đang tải dữ liệu..." />
+            <p className="loading-message">Loading data...</p>
           ) : errorMsg ? (
-            <p className="text-red-500 font-bold text-center">{errorMsg}</p>
+            <p className="error-message">{errorMsg}</p>
           ) : !data ? (
-            <p className="text-gray-500 text-center">Không có dữ liệu</p>
+            <p className="info-message">No data available</p>
           ) : (
-            <div className="space-y-6 max-w-3xl mx-auto">
-              {/* Thống kê nhanh */}
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap gap-6 justify-between items-center">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-800">{data.submission.student_name}</h3>
-                  <p className="text-sm text-gray-500">Lớp: {data.submission.class_name || 'N/A'}</p>
+            <>
+              {/* Stats summary */}
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', padding: '1rem', background: 'var(--primary-light)', borderRadius: 'var(--radius-sm)', border: '1.5px solid rgba(91,156,246,0.2)' }}>
+                <div style={{ flex: 1, minWidth: '120px' }}>
+                  <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-main)' }}>{sub.student_name}</div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Class: {sub.class_name || 'N/A'}</div>
                 </div>
-                <div className="text-center">
-                  <p className="text-sm font-bold text-blue-600 mb-1">Điểm số</p>
-                  <p className="text-2xl font-black text-blue-700">{data.submission.score}</p>
+                <div style={{ textAlign: 'center', padding: '0 0.5rem' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)' }}>SCORE</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--primary)' }}>{sub.score} / 10</div>
                 </div>
-                <div className="text-center">
-                  <p className="text-sm font-bold text-green-600 mb-1">Tỷ lệ đúng</p>
-                  <p className="text-2xl font-black text-green-700">{data.submission.percentage}%</p>
+                <div style={{ textAlign: 'center', padding: '0 0.5rem' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#166534' }}>ACCURACY</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#166534' }}>{sub.percentage}%</div>
                 </div>
-                <div className="text-center">
-                  <p className="text-sm font-bold text-gray-500 mb-1">Thời gian làm</p>
-                  <p className="text-xl font-bold text-gray-700">{Math.floor(data.submission.duration_seconds / 60)}m {data.submission.duration_seconds % 60}s</p>
+                <div style={{ textAlign: 'center', padding: '0 0.5rem' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>DURATION</div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                    {Math.floor(sub.duration_seconds / 60)}m {sub.duration_seconds % 60}s
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center', padding: '0 0.5rem' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>CORRECT</div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                    {sub.correct_count} / {sub.total_questions || (details.length > 0 ? details.length : '?')}
+                  </div>
                 </div>
               </div>
 
-              {/* Danh sách câu hỏi và đáp án */}
-              <div className="space-y-4">
-                {data.details.length === 0 ? (
-                  <p className="text-center text-gray-500 italic">Chi tiết đáp án không khả dụng.</p>
-                ) : (
-                  data.details.map((item, index) => {
+              {/* Details list */}
+              {details.length === 0 ? (
+                <p className="info-message" style={{ fontStyle: 'italic' }}>Answer details are not available ("Show Result" was disabled for this exam).</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {details.map((item, index) => {
                     const q = item.questions;
+                    const isCorrect = item.is_correct;
                     return (
-                      <div key={item.id} className={`bg-white p-6 rounded-2xl shadow-sm border ${item.is_correct ? 'border-green-200' : 'border-red-200'}`}>
-                        <div className="flex items-start gap-4">
-                          <span className={`flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm text-white ${item.is_correct ? 'bg-green-500' : 'bg-red-500'}`}>
+                      <div key={item.id} style={{
+                        padding: '0.75rem 1rem',
+                        borderRadius: 'var(--radius-sm)',
+                        border: `1.5px solid ${isCorrect ? 'rgba(107,203,119,0.4)' : 'rgba(255,107,107,0.4)'}`,
+                        background: isCorrect ? 'var(--secondary-light)' : 'var(--accent-light)'
+                      }}>
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                          <span style={{
+                            width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontWeight: 800, fontSize: '0.8rem', color: 'white',
+                            background: isCorrect ? '#22c55e' : '#ef4444'
+                          }}>
                             {index + 1}
                           </span>
-                          <div className="flex-1">
-                            <h3 className="text-lg font-bold text-gray-800 whitespace-pre-wrap">{q.question_text}</h3>
-                            <div className="mt-3 text-sm space-y-2">
-                              <p className="text-gray-600">
-                                <span className="font-bold">Học sinh chọn: </span>
-                                <span className={item.is_correct ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
-                                  {item.student_answer || '(Bỏ trống)'}
-                                </span>
-                              </p>
-                              {!item.is_correct && (
-                                <p className="text-gray-600">
-                                  <span className="font-bold">Đáp án đúng: </span>
-                                  <span className="text-blue-600 font-bold">
-                                    {q.type === 'multiple_choice' ? q.correct_answer : JSON.stringify(q.correct_answer)}
-                                  </span>
-                                </p>
-                              )}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)', marginBottom: '0.3rem' }}>
+                              {q?.question_text}
                             </div>
+                            <div style={{ fontSize: '0.85rem' }}>
+                              <span style={{ fontWeight: 700, color: 'var(--text-muted)' }}>Student's answer: </span>
+                              <span style={{ fontWeight: 800, color: isCorrect ? '#166534' : '#dc2626' }}>
+                                {item.student_answer || '(Blank)'}
+                              </span>
+                            </div>
+                            {!isCorrect && (
+                              <div style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>
+                                <span style={{ fontWeight: 700, color: 'var(--text-muted)' }}>Correct answer: </span>
+                                <span style={{ fontWeight: 800, color: 'var(--primary)' }}>
+                                  {q?.correct_answer}
+                                </span>
+                              </div>
+                            )}
                           </div>
+                          <span style={{ fontSize: '1.25rem' }}>{isCorrect ? '✅' : '❌'}</span>
                         </div>
                       </div>
                     );
-                  })
-                )}
-              </div>
-            </div>
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
-        
-        {/* Footer Modal */}
-        <div className="px-6 py-4 border-t border-gray-100 bg-white flex justify-end shrink-0">
-          <button onClick={onClose} className="px-5 py-2.5 rounded-lg bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition-colors">
-            Đóng
-          </button>
+
+        {/* Footer */}
+        <div style={{ padding: '0.75rem 1.25rem', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', background: 'var(--bg-color)' }}>
+          <button className="btn-secondary" style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }} onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

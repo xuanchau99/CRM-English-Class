@@ -176,7 +176,7 @@ export const Settings = () => {
             <input
               type="text"
               required
-              placeholder="VD: openai_api_key"
+              placeholder="VD: gemini_api_key"
               value={newKey}
               onChange={(e) => setNewKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
               className="w-full px-4 py-2.5 rounded-lg border border-blue-200 focus:ring-2 focus:ring-[#8fa8ff] font-mono text-sm"

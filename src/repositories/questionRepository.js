@@ -15,14 +15,11 @@ export const questionRepository = {
   },
 
   createQuestion: async (examId, questionData, orderIndex = 0) => {
-    const question_code = 'Q' + Math.random().toString(36).substring(2, 8).toUpperCase();
-    
     const { data, error } = await supabase
       .from('questions')
       .insert([{
         ...questionData,
         exam_id: examId,
-        question_code,
         order_index: orderIndex
       }])
       .select()
@@ -67,21 +64,54 @@ export const questionRepository = {
   },
 
   importQuestions: async (examId, parsedDataList) => {
-    // parsedDataList: Array of prepared question objects
-    // Need to assign question_code and exam_id
-    const inserts = parsedDataList.map((q, i) => ({
-      ...q,
-      exam_id: examId,
-      question_code: 'Q' + Math.random().toString(36).substring(2, 8).toUpperCase(),
-      order_index: i
-    }));
-
-    const { data, error } = await supabase
+    // 1. Fetch existing questions to check for duplicates and soft-deletes
+    const { data: existingQs } = await supabase
       .from('questions')
-      .insert(inserts)
-      .select();
+      .select('id, question_code')
+      .eq('exam_id', examId);
+    
+    const existingMap = {};
+    if (existingQs) {
+      existingQs.forEach(q => {
+        existingMap[q.question_code] = q.id;
+      });
+    }
 
-    if (error) throw error;
-    return data;
+    const inserts = [];
+    const updates = [];
+
+    parsedDataList.forEach((q, i) => {
+      const payload = {
+        ...q,
+        exam_id: examId,
+        order_index: i,
+        is_deleted: false // Restore if it was soft-deleted
+      };
+
+      if (existingMap[q.question_code]) {
+        payload.id = existingMap[q.question_code];
+        updates.push(payload);
+      } else {
+        inserts.push(payload);
+      }
+    });
+
+    // 2. Perform bulk update (using upsert with primary key id)
+    if (updates.length > 0) {
+      const { error: updateError } = await supabase
+        .from('questions')
+        .upsert(updates);
+      if (updateError) throw updateError;
+    }
+
+    // 3. Perform bulk insert
+    if (inserts.length > 0) {
+      const { error: insertError } = await supabase
+        .from('questions')
+        .insert(inserts);
+      if (insertError) throw insertError;
+    }
+
+    return parsedDataList; // Return the processed list
   }
 };

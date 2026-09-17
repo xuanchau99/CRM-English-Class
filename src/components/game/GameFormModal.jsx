@@ -31,79 +31,68 @@ export const GameFormModal = ({ isOpen, onClose, onSave, initialData }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-[#faf9ff]">
-          <h2 className="text-xl font-bold text-[#4a5c75]">
-            {initialData ? 'Chỉnh sửa Trò chơi' : 'Thêm Trò chơi mới'}
-          </h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-red-500 transition-colors text-2xl font-bold leading-none"
-          >
-            ×
-          </button>
+    <div className="modal" style={{ display: 'flex' }}>
+      <div className="modal-content" style={{ maxWidth: '480px' }}>
+        <div className="modal-header">
+          <h3>{initialData ? '✏️ Chỉnh sửa Trò chơi' : '+ Thêm Trò chơi mới'}</h3>
+          <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-semibold text-[#4a5c75] mb-1">Tên Trò chơi *</label>
-            <input
-              type="text"
-              required
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#8fa8ff]"
-              value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-              placeholder="VD: Kahoot Ôn tập Unit 1"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-[#4a5c75] mb-1">Đường dẫn Trò chơi (URL) *</label>
-            <input
-              type="url"
-              required
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#8fa8ff]"
-              value={formData.url}
-              onChange={(e) => setFormData({...formData, url: e.target.value})}
-              placeholder="https://kahoot.it/..."
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-[#4a5c75] mb-1">Đường dẫn Ảnh bìa (Image URL)</label>
-            <input
-              type="url"
-              className="w-full px-4 py-2 mb-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#8fa8ff]"
-              value={formData.image_url}
-              onChange={(e) => setFormData({...formData, image_url: e.target.value})}
-              placeholder="https://example.com/image.jpg"
-            />
-            {formData.image_url && (
-              <div className="mt-2 text-center">
-                <img 
-                  src={formData.image_url} 
-                  alt="Preview" 
-                  className="h-24 object-cover mx-auto rounded-lg border border-gray-200 shadow-sm"
-                  onError={(e) => e.target.style.display = 'none'}
+        <form onSubmit={handleSubmit} style={{ background: 'none', border: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0' }}>
+          <div className="modal-section" style={{ marginTop: '1rem' }}>
+            <p className="modal-section-title">🎮 Game Info</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div>
+                <label style={{ fontWeight: 700, fontSize: '0.9rem', display: 'block', marginBottom: '0.25rem' }}>Tên Trò chơi <span className="required-star">*</span></label>
+                <input
+                  type="text"
+                  required
+                  style={{ width: '100%', border: '2px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', boxSizing: 'border-box', fontFamily: 'var(--font)' }}
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  placeholder="VD: Kahoot Vocabulary"
                 />
               </div>
-            )}
+
+              <div>
+                <label style={{ fontWeight: 700, fontSize: '0.9rem', display: 'block', marginBottom: '0.25rem' }}>Đường dẫn Trò chơi (URL) <span className="required-star">*</span></label>
+                <input
+                  type="url"
+                  required
+                  style={{ width: '100%', border: '2px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', boxSizing: 'border-box', fontFamily: 'var(--font)' }}
+                  value={formData.url}
+                  onChange={(e) => setFormData({...formData, url: e.target.value})}
+                  placeholder="https://kahoot.it/..."
+                />
+              </div>
+
+              <div>
+                <label style={{ fontWeight: 700, fontSize: '0.9rem', display: 'block', marginBottom: '0.25rem' }}>Đường dẫn Ảnh bìa (Image URL)</label>
+                <input
+                  type="url"
+                  style={{ width: '100%', border: '2px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', boxSizing: 'border-box', fontFamily: 'var(--font)' }}
+                  value={formData.image_url}
+                  onChange={(e) => setFormData({...formData, image_url: e.target.value})}
+                  placeholder="https://...image.png"
+                />
+                {formData.image_url && (
+                  <div style={{ marginTop: '0.5rem', textAlign: 'center' }}>
+                    <img 
+                      src={formData.image_url} 
+                      alt="Preview" 
+                      style={{ height: '80px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-sm)' }}
+                      onError={(e) => e.target.style.display = 'none'}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="pt-4 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2.5 rounded-lg text-gray-600 font-bold hover:bg-gray-100 transition-colors"
-            >
-              Huỷ bỏ
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2.5 rounded-lg bg-[#357ae8] text-white font-bold hover:bg-[#2b65c2] shadow-md transition-colors"
-            >
-              {initialData ? 'Cập nhật' : 'Thêm mới'}
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', justifyContent: 'flex-end' }}>
+            <button type="button" className="btn-secondary" onClick={onClose}>Huỷ bỏ</button>
+            <button type="submit" className="btn-primary" style={{ padding: '0.6rem 1.5rem' }}>
+              {initialData ? 'Cập nhật' : 'Lưu lại'}
             </button>
           </div>
         </form>

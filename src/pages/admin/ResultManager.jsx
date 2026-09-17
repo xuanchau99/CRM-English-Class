@@ -1,110 +1,83 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import Papa from 'papaparse';
+import React, { useState, useEffect } from 'react';
 import { useNotification } from '../../components/common/NotificationSystem';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
-import { EmptyState } from '../../components/common/EmptyState';
+import { examRepository } from '../../repositories/examRepository';
 import { resultRepository } from '../../repositories/resultRepository';
 import { SubmissionDetailModal } from '../../components/result/SubmissionDetailModal';
+import Papa from 'papaparse';
 
 export const ResultManager = () => {
   const { showToast } = useNotification();
   
+  const [exams, setExams] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterExam, setFilterExam] = useState('');
-  const [filterClass, setFilterClass] = useState('');
-
+  // viewState: 'summary' or 'detail'
+  const [viewState, setViewState] = useState('summary');
+  const [selectedExamId, setSelectedExamId] = useState(null);
+  
   // Modal State
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState(null);
 
-  const fetchSubmissions = async () => {
+  const fetchInitialData = async () => {
     try {
       setLoading(true);
-      const data = await resultRepository.getSubmissions();
-      setSubmissions(data);
+      const [examsData, submissionsData] = await Promise.all([
+        examRepository.getExams(),
+        resultRepository.getSubmissions()
+      ]);
+      setExams(examsData);
+      setSubmissions(submissionsData);
     } catch (error) {
-      showToast('Lỗi tải danh sách bài nộp: ' + error.message, 'error');
+      showToast('Lỗi tải dữ liệu: ' + error.message, 'error');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchSubmissions();
+    fetchInitialData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Bạn có chắc muốn xoá bài nộp này?')) {
+  const handleDelete = async (id, studentName) => {
+    if (window.confirm(`Are you sure you want to delete the results of "${studentName}"?`)) {
       try {
         await resultRepository.deleteSubmission(id);
         showToast('Xoá thành công!', 'success');
-        fetchSubmissions();
+        fetchInitialData();
       } catch (error) {
         showToast('Lỗi khi xoá: ' + error.message, 'error');
       }
     }
   };
 
-  // Logic Lọc (Filter)
-  const filteredSubmissions = useMemo(() => {
-    return submissions.filter(sub => {
-      const matchSearch = sub.student_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          sub.submission_code?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchExam = filterExam ? sub.exam_id === filterExam : true;
-      const matchClass = filterClass ? sub.class_name === filterClass : true;
-      return matchSearch && matchExam && matchClass;
-    });
-  }, [submissions, searchQuery, filterExam, filterClass]);
-
-  // Extract unique exams and classes for filter dropdowns
-  const uniqueExams = useMemo(() => {
-    const exams = new Map();
-    submissions.forEach(s => {
-      if (s.exams && s.exam_id) {
-        exams.set(s.exam_id, s.exams.title);
-      }
-    });
-    return Array.from(exams.entries());
-  }, [submissions]);
-
-  const uniqueClasses = useMemo(() => {
-    const classes = new Set();
-    submissions.forEach(s => {
-      if (s.class_name) classes.add(s.class_name);
-    });
-    return Array.from(classes).sort();
-  }, [submissions]);
-
-  const handleExportCSV = () => {
-    if (filteredSubmissions.length === 0) {
+  const handleExportCSV = (examSubs, examTitle) => {
+    if (examSubs.length === 0) {
       showToast('Không có dữ liệu để export', 'warning');
       return;
     }
 
-    const exportData = filteredSubmissions.map(sub => ({
-      'Mã bài nộp': sub.submission_code,
-      'Đề thi': sub.exams?.title || '',
-      'Họ và Tên': sub.student_name,
-      'Lớp': sub.class_name || '',
-      'Điểm': sub.score,
-      'Tỷ lệ đúng (%)': sub.percentage,
-      'Số câu đúng': sub.correct_count,
-      'Thời gian làm (s)': sub.duration_seconds,
-      'Ngày nộp': new Date(sub.submitted_at).toLocaleString('vi-VN')
+    const exportData = examSubs.map((sub, idx) => ({
+      'No.': idx + 1,
+      'Student Name': sub.student_name,
+      'Class': sub.class_name || '',
+      'Score': sub.score,
+      'Percentage (%)': sub.percentage,
+      'Correct Count': sub.correct_count,
+      'Duration (s)': sub.duration_seconds,
+      'Submitted At': new Date(sub.submitted_at).toLocaleString('en-US')
     }));
 
     const csv = Papa.unparse(exportData);
-    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv], { type: "text/csv;charset=utf-8" }); // BOM for Excel UTF-8
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv], { type: "text/csv;charset=utf-8" }); 
     const url = URL.createObjectURL(blob);
     
     const a = document.createElement('a');
     a.href = url;
-    a.download = `KetQua_KiemTra_${new Date().getTime()}.csv`;
+    a.download = `Submissions_${examTitle}_${new Date().getTime()}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -116,118 +89,197 @@ export const ResultManager = () => {
     setDetailModalOpen(true);
   };
 
-  if (loading) return <LoadingSpinner message="Đang tải kết quả bài nộp..." />;
+  // --- Render Summary View (List of Exams with Submissions Count) ---
+  const renderSummaryView = () => {
+    if (exams.length === 0) {
+      return <p className="info-message">No exams found.</p>;
+    }
 
-  return (
-    <div>
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h2 className="text-2xl font-bold text-[#4a5c75]">Quản lý Kết quả</h2>
-        <button
-          onClick={handleExportCSV}
-          className="bg-teal-600 text-white px-6 py-2.5 rounded-lg font-bold shadow-md hover:bg-teal-700 transition-colors"
-        >
-          ⬇️ Export CSV
-        </button>
-      </div>
+    return (
+      <div className="table-responsive">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>Exam ID</th>
+              <th>Exam Title</th>
+              <th>Active State</th>
+              <th>Submissions Count</th>
+              <th>Last Submission</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {exams.map((exam, idx) => {
+              const examSubs = submissions.filter(s => s.exam_id === exam.id);
+              const count = examSubs.length;
+              const isActive = exam.is_active;
+              
+              let lastSubTime = 'N/A';
+              if (count > 0) {
+                 const latest = examSubs.reduce((a, b) => new Date(b.submitted_at) > new Date(a.submitted_at) ? b : a);
+                 lastSubTime = new Date(latest.submitted_at).toLocaleString();
+              }
 
-      {/* Filters Bar */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4">
-        <div className="flex-1">
-          <input
-            type="text"
-            placeholder="Tìm theo Tên hoặc Mã bài nộp..."
-            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#8fa8ff]"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        <div className="w-full md:w-64">
-          <select
-            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#8fa8ff]"
-            value={filterExam}
-            onChange={(e) => setFilterExam(e.target.value)}
-          >
-            <option value="">-- Tất cả Đề thi --</option>
-            {uniqueExams.map(([id, title]) => (
-              <option key={id} value={id}>{title}</option>
-            ))}
-          </select>
-        </div>
-        <div className="w-full md:w-48">
-          <select
-            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#8fa8ff]"
-            value={filterClass}
-            onChange={(e) => setFilterClass(e.target.value)}
-          >
-            <option value="">-- Tất cả Lớp --</option>
-            {uniqueClasses.map(cls => (
-              <option key={cls} value={cls}>{cls}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Table */}
-      {filteredSubmissions.length === 0 ? (
-        <EmptyState 
-          title="Không tìm thấy bài nộp" 
-          description="Chưa có học sinh nào nộp bài hoặc dữ liệu không khớp với bộ lọc."
-        />
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-          <table className="w-full text-left text-sm text-[#4a5c75]">
-            <thead className="bg-[#f1f5f9] text-[#64748b] font-bold uppercase text-xs">
-              <tr>
-                <th className="px-6 py-4">Mã bài nộp</th>
-                <th className="px-6 py-4">Học sinh</th>
-                <th className="px-6 py-4">Lớp</th>
-                <th className="px-6 py-4 max-w-xs">Bài thi</th>
-                <th className="px-6 py-4 text-center">Điểm</th>
-                <th className="px-6 py-4 text-center">% Đúng</th>
-                <th className="px-6 py-4">Thời gian</th>
-                <th className="px-6 py-4 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredSubmissions.map((sub) => (
-                <tr key={sub.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-mono text-xs text-gray-500">{sub.submission_code}</td>
-                  <td className="px-6 py-4 font-bold text-gray-800">{sub.student_name}</td>
-                  <td className="px-6 py-4">{sub.class_name || '-'}</td>
-                  <td className="px-6 py-4 truncate max-w-xs" title={sub.exams?.title}>{sub.exams?.title}</td>
-                  <td className="px-6 py-4 text-center font-bold text-blue-600">{sub.score}</td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${sub.percentage >= 50 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {sub.percentage}%
+              return (
+                <tr key={exam.id}>
+                  <td>{idx + 1}</td>
+                  <td><strong>{exam.exam_code}</strong></td>
+                  <td>{exam.title}</td>
+                  <td>
+                    <span 
+                      className="badge" 
+                      style={{
+                        backgroundColor: isActive ? 'var(--secondary-light)' : 'var(--accent-light)',
+                        color: isActive ? '#15803d' : '#b91c1c',
+                        border: `1px solid ${isActive ? 'rgba(107,203,119,0.3)' : 'rgba(255,107,107,0.3)'}`,
+                        fontWeight: 800,
+                        display: 'inline-block',
+                        textAlign: 'center'
+                      }}
+                    >
+                      {isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-gray-500 text-xs">
-                    {new Date(sub.submitted_at).toLocaleString('vi-VN')}
+                  <td style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)' }}>
+                    {count} student(s)
                   </td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <button 
-                        onClick={() => openDetail(sub.id)}
-                        className="px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg font-bold text-xs transition-colors"
-                      >
-                        👁️ Chi tiết
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(sub.id)}
-                        className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors" title="Xoá"
-                      >
-                        🗑️
-                      </button>
-                    </div>
+                  <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    {lastSubTime}
+                  </td>
+                  <td>
+                    <button 
+                      style={{ background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '4px', padding: '0.4rem 0.75rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}
+                      onClick={() => {
+                        setSelectedExamId(exam.id);
+                        setViewState('detail');
+                      }}
+                    >
+                      <i className="fa-solid fa-chart-bar"></i> View Results
+                    </button>
                   </td>
                 </tr>
-              ))}
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  // --- Render Detail View (List of Submissions for an Exam) ---
+  const renderDetailView = () => {
+    const examSubs = submissions.filter(s => s.exam_id === selectedExamId).sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at));
+    const currentExam = exams.find(e => e.id === selectedExamId);
+
+    if (examSubs.length === 0) {
+      return <p className="info-message">No student submissions found for this exam yet.</p>;
+    }
+
+    return (
+      <div>
+        <div className="table-responsive">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>No.</th>
+                <th>Student Name</th>
+                <th>Class</th>
+                <th>Score (Scale 10)</th>
+                <th>Percentage</th>
+                <th>Duration</th>
+                <th>Submitted At</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {examSubs.map((sub, idx) => {
+                const score = sub.score !== undefined ? sub.score : 'N/A';
+                const percentage = sub.percentage !== undefined ? sub.percentage : 'N/A';
+                const minutes = Math.floor(sub.duration_seconds / 60);
+                const seconds = sub.duration_seconds % 60;
+                const durationStr = `${minutes}m ${seconds}s`;
+                const submittedDate = sub.submitted_at ? new Date(sub.submitted_at).toLocaleString() : 'N/A';
+
+                return (
+                  <tr key={sub.id}>
+                    <td>{idx + 1}</td>
+                    <td><strong>{sub.student_name}</strong></td>
+                    <td>{sub.class_name}</td>
+                    <td style={{ fontWeight: 800, color: 'var(--primary)' }}>{score} / 10</td>
+                    <td>{percentage}%</td>
+                    <td>{durationStr}</td>
+                    <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{submittedDate}</td>
+                    <td style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button 
+                        style={{ background: 'var(--primary-light)', color: 'var(--primary)', border: '1px solid rgba(77, 150, 255, 0.3)', borderRadius: '4px', padding: '0.35rem 0.6rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                        onClick={() => openDetail(sub.id)}
+                      >
+                        <i className="fa-solid fa-eye"></i> View Answers
+                      </button>
+                      <button 
+                        style={{ background: 'var(--accent-light)', color: 'var(--danger)', border: '1px solid rgba(255, 107, 107, 0.3)', borderRadius: '4px', padding: '0.35rem 0.6rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                        onClick={() => handleDelete(sub.id, sub.student_name)} 
+                        title="Delete result & allow retake"
+                      >
+                        <i className="fa-solid fa-rotate-left"></i> Reset
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-      )}
+      </div>
+    );
+  };
 
-      {/* Modal Chi Tiết */}
+  const getTitle = () => {
+    if (viewState === 'summary') return 'Student Submissions Summary';
+    const exam = exams.find(e => e.id === selectedExamId);
+    return `Submissions for Exam: ${exam?.exam_code || selectedExamId}`;
+  };
+
+  return (
+    <div id="tab-submissions-content">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h3 id="submissions-title" style={{ margin: 0 }}>{getTitle()}</h3>
+        {viewState === 'detail' && (
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <button 
+              className="btn-secondary" 
+              style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, border: '1px solid var(--border-color)', background: 'white' }}
+              onClick={() => {
+                setViewState('summary');
+                setSelectedExamId(null);
+              }}
+            >
+              <i className="fa-solid fa-arrow-left"></i> Back to Exam List
+            </button>
+            <button 
+              className="btn-primary" 
+              style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, border: 'none' }}
+              onClick={() => {
+                const examSubs = submissions.filter(s => s.exam_id === selectedExamId).sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at));
+                const currentExam = exams.find(e => e.id === selectedExamId);
+                handleExportCSV(examSubs, currentExam?.title);
+              }}
+            >
+              <i className="fa-solid fa-file-csv"></i> Export CSV
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div id="submissions-table-container" className="data-table-container">
+        {loading ? (
+          <p className="loading-message">Loading data...</p>
+        ) : (
+          viewState === 'summary' ? renderSummaryView() : renderDetailView()
+        )}
+      </div>
+
       <SubmissionDetailModal 
         isOpen={detailModalOpen}
         onClose={() => setDetailModalOpen(false)}
