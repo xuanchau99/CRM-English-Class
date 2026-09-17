@@ -181,5 +181,21 @@ export const studentRepository = {
     }
 
     return { submission, details };
-  }
+  },
+
+  // Lấy email nhận thông báo từ system_settings
+  getReceiveMail: async () => {
+    const { data } = await supabase
+      .from('system_settings')
+      .select('value')
+      .eq('key', 'receive_mail')
+      .single();
+    if (!data) return null;
+    // value được lưu dạng JSON string: "admin@gmail.com"
+    try {
+      return typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+    } catch {
+      return data.value;
+    }
+  },
 };

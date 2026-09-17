@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/common/NotificationSystem';
 import { studentRepository } from '../../repositories/studentRepository';
+import { sendSubmissionNotification } from '../../lib/emailService';
 import { ReactSortable } from 'react-sortablejs';
 import './ExamPlayer.css';
 
@@ -257,7 +258,25 @@ export const ExamPlayer = () => {
       
       localStorage.removeItem(`exam_state_${examInfo.id}`);
       localStorage.removeItem(`exam_start_${examInfo.id}`);
-      
+
+      // Fire-and-forget: gửi email thông báo cho admin (không block UX học sinh)
+      studentRepository.getReceiveMail().then(receiveEmail => {
+        if (receiveEmail) {
+          sendSubmissionNotification({
+            toEmail:        receiveEmail,
+            studentName:    studentInfo.name,
+            className:      studentInfo.className,
+            examTitle:      examInfo.title,
+            examCode:       examCode,
+            score:          '(xem kết quả)',
+            percentage:     '(xem kết quả)',
+            correctCount:   '(xem kết quả)',
+            totalQuestions: questions.length,
+            submittedAt:    new Date().toLocaleString('vi-VN'),
+          });
+        }
+      }).catch(() => { /* ignore email errors */ });
+
       showToast('Nộp bài thành công!', 'success');
       navigate(`/result/${submissionId}`, { replace: true });
     } catch (error) {
