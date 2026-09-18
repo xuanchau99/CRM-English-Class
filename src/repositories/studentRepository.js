@@ -54,15 +54,26 @@ export const studentRepository = {
 
     // Giấu đáp án đúng khi trả về cho học sinh nhưng phải truyền đủ dữ liệu cần thiết (words cho arrange_sentence)
     return (questions || []).map(q => {
+      const { correct_answer, accepted_answers: _acceptedAnswers, ...studentQuestion } = q;
       let extraData = {};
       if (q.type === 'arrange_sentence') {
-        extraData.words = (q.correct_answer || '').split(' ').filter(w => w.trim());
+        extraData.words = (correct_answer || '').split(' ').filter(w => w.trim());
+      } else if (q.type === 'matching') {
+        const matchingOptions = (correct_answer || '')
+          .split(/\r?\n/)
+          .map(option => option.trim())
+          .filter(Boolean);
+
+        for (let i = matchingOptions.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [matchingOptions[i], matchingOptions[j]] = [matchingOptions[j], matchingOptions[i]];
+        }
+
+        extraData.options = matchingOptions;
       }
       return {
-        ...q,
-        ...extraData,
-        correct_answer: undefined,
-        accepted_answers: undefined
+        ...studentQuestion,
+        ...extraData
       };
     });
   },
