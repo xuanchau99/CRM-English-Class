@@ -232,4 +232,12 @@ export const studentRepository = {
       publicKey:      map['emailjs_public_key'] || '',
     };
   },
+
+  // Đánh dấu đã gửi email thành công
+  markEmailSent: async (submissionId) => {
+    const { error } = await supabase.rpc('mark_email_sent', { p_submission_id: submissionId });
+    if (error) {
+      console.error('[studentRepository] Failed to mark email as sent:', error);
+    }
+  }
 };

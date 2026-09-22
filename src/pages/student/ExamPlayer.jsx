@@ -277,9 +277,13 @@ export const ExamPlayer = () => {
               totalQuestions: questions.length,
               submittedAt:    new Date().toLocaleString('vi-VN'),
             }
-          );
+          ).then(result => {
+            if (result && result.status === 200) {
+              studentRepository.markEmailSent(submissionId);
+            }
+          }).catch(() => { /* ignore send errors */ });
         }
-      }).catch(() => { /* ignore email errors */ });
+      }).catch(() => { /* ignore fetch errors */ });
 
       showToast('Nộp bài thành công!', 'success');
       navigate(`/result/${submissionId}`, { replace: true });

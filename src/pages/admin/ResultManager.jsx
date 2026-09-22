@@ -189,6 +189,7 @@ export const ResultManager = () => {
                 <th>Percentage</th>
                 <th>Duration</th>
                 <th>Submitted At</th>
+                <th>Email Sent</th>
                 <th>Action</th>
               </tr>
             </thead>
@@ -210,6 +211,13 @@ export const ResultManager = () => {
                     <td>{percentage}%</td>
                     <td>{durationStr}</td>
                     <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{submittedDate}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      {sub.is_email_sent ? (
+                        <span style={{ color: '#10b981', fontSize: '1.2rem' }} title="Email đã gửi thành công"><i className="fa-solid fa-envelope-circle-check"></i></span>
+                      ) : (
+                        <span style={{ color: '#9ca3af', fontSize: '1.2rem' }} title="Chưa gửi email"><i className="fa-solid fa-envelope"></i></span>
+                      )}
+                    </td>
                     <td style={{ display: 'flex', gap: '0.5rem' }}>
                       <button 
                         style={{ background: 'var(--primary-light)', color: 'var(--primary)', border: '1px solid rgba(77, 150, 255, 0.3)', borderRadius: '4px', padding: '0.35rem 0.6rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
