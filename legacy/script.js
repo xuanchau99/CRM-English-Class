@@ -2276,6 +2276,22 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                 const processedQuestions = [];
                 let errorCount = 0;
 
+                const generateQuestionId = (() => {
+                    let counter = Math.floor(Math.random() * 1000);
+                    return () => {
+                        const d = new Date();
+                        const yyyy = d.getFullYear();
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        const hh = String(d.getHours()).padStart(2, '0');
+                        const min = String(d.getMinutes()).padStart(2, '0');
+                        const ss = String(d.getSeconds()).padStart(2, '0');
+                        counter = (counter + 1) % 1000;
+                        const random3 = String(counter).padStart(3, '0');
+                        return `${yyyy}${mm}${dd}_${hh}:${min}:${ss}_${random3}`;
+                    };
+                })();
+
                 const tableRows = [];
                 json.forEach((rawRow, index) => {
                     const row = normalizeRowKeys(rawRow);
@@ -2285,7 +2301,7 @@ Chúc bạn có những giờ giảng dạy trải nghiệm hiệu quả và mư
                     if (!isValid) errorCount++;
 
                     const processed = {
-                        question_id: 'Q' + Date.now().toString().slice(-6) + Math.floor(Math.random() * 1000) + index,
+                        question_id: generateQuestionId(),
                         exam_id: selectedExamId,
                         type: row.type ? String(row.type).trim().toLowerCase() : '',
                         level: row.level ? String(row.level).trim().toLowerCase() : 'medium',

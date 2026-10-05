@@ -159,6 +159,22 @@ export const QuestionManager = () => {
     }
   };
 
+  const generateQuestionId = (() => {
+    let counter = Math.floor(Math.random() * 1000);
+    return () => {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      const ss = String(d.getSeconds()).padStart(2, '0');
+      counter = (counter + 1) % 1000;
+      const random3 = String(counter).padStart(3, '0');
+      return `${yyyy}${mm}${dd}_${hh}:${min}:${ss}_${random3}`;
+    };
+  })();
+
   const normalizeRow = (row) => {
     let options = null;
     const type = (row.type || 'multiple_choice').toLowerCase().trim();
@@ -196,7 +212,7 @@ export const QuestionManager = () => {
     }
 
     return {
-      question_code: row.question_id || row.question_code || 'Q' + Date.now().toString().slice(-6),
+      question_code: generateQuestionId(),
       type,
       level: (row.level || 'medium').toLowerCase(),
       question_text: String(row.question_text || '').trim(),
