@@ -7,8 +7,7 @@ export const questionRepository = {
       .select('*')
       .eq('exam_id', examId)
       .eq('is_deleted', false)
-      .order('order_index', { ascending: true })
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
     return data;
@@ -48,6 +47,16 @@ export const questionRepository = {
       .eq('id', id)
       .select()
       .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  deleteMultipleQuestions: async (ids) => {
+    const { data, error } = await supabase
+      .from('questions')
+      .update({ is_deleted: true })
+      .in('id', ids);
 
     if (error) throw error;
     return data;

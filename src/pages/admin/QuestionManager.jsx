@@ -24,6 +24,7 @@ export const QuestionManager = () => {
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState(new Set());
 
   // Import State
   const [importData, setImportData] = useState([]);
@@ -311,6 +312,38 @@ export const QuestionManager = () => {
     }
   };
 
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedQuestionIds(new Set(filteredQuestions.map(q => q.id)));
+    } else {
+      setSelectedQuestionIds(new Set());
+    }
+  };
+
+  const handleSelectQuestion = (id) => {
+    const newSelected = new Set(selectedQuestionIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedQuestionIds(newSelected);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedQuestionIds.size === 0) return;
+    if (window.confirm(`Bạn có chắc muốn xoá ${selectedQuestionIds.size} câu hỏi đã chọn?`)) {
+      try {
+        await questionRepository.deleteMultipleQuestions(Array.from(selectedQuestionIds));
+        showToast(`Đã xoá ${selectedQuestionIds.size} câu hỏi!`, 'success');
+        setSelectedQuestionIds(new Set());
+        handleLoadQuestions(selectedExamId);
+      } catch (error) {
+        showToast('Lỗi khi xoá: ' + error.message, 'error');
+      }
+    }
+  };
+
   const handleGenerateAI = async () => {
     if (!aiTopic.trim()) {
       showToast('Vui lòng nhập chủ đề hoặc đoạn văn mẫu.', 'warning');
@@ -372,9 +405,7 @@ export const QuestionManager = () => {
       showToast('Không có dữ liệu để xuất Excel!', 'warning');
       return;
     }
-    const dataToExport = filteredQuestions.map((q, idx) => ({
-      'no': idx + 1,
-      'question_code': q.question_code,
+    const dataToExport = filteredQuestions.map((q) => ({
       'type': q.type,
       'level': q.level,
       'question_text': q.question_text,
@@ -385,7 +416,9 @@ export const QuestionManager = () => {
       'correct_answer': q.correct_answer,
       'accepted_answers': q.accepted_answers && q.accepted_answers.length > 0 ? JSON.stringify(q.accepted_answers) : '',
       'explanation': q.explanation || '',
-      'points': q.points
+      'points': q.points,
+      'tags': q.tags || '',
+      'active': q.is_active !== undefined ? q.is_active : true
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -632,16 +665,27 @@ export const QuestionManager = () => {
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h3 style={{ margin: 0 }}>Question Bank Search & Filters</h3>
-              <button
-                className="btn-primary"
-                onClick={() => {
-                  setEditingQuestion(null);
-                  setIsFormOpen(true);
-                }}
-                style={{ backgroundColor: 'var(--secondary)', boxShadow: '0 4px 12px rgba(107, 203, 119, 0.2)' }}
-              >
-                + Add Question Manually
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                {selectedQuestionIds.size > 0 && (
+                  <button
+                    className="btn-danger"
+                    onClick={handleBulkDelete}
+                    style={{ backgroundColor: '#dc2626', color: 'white', padding: '0.6rem 1.25rem', borderRadius: '2rem', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    🗑 Xoá {selectedQuestionIds.size} mục
+                  </button>
+                )}
+                <button
+                  className="btn-primary"
+                  onClick={() => {
+                    setEditingQuestion(null);
+                    setIsFormOpen(true);
+                  }}
+                  style={{ backgroundColor: 'var(--secondary)', boxShadow: '0 4px 12px rgba(107, 203, 119, 0.2)' }}
+                >
+                  + Add Question Manually
+                </button>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', background: '#f8fafc', padding: '1.25rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
@@ -725,6 +769,13 @@ export const QuestionManager = () => {
               <table className="data-table">
                 <thead>
                   <tr>
+                    <th style={{ width: '40px', textAlign: 'center' }}>
+                      <input 
+                        type="checkbox" 
+                        onChange={handleSelectAll} 
+                        checked={filteredQuestions.length > 0 && selectedQuestionIds.size === filteredQuestions.length} 
+                      />
+                    </th>
                     <th>ACTIONS</th>
                     <th>NO.</th>
                     <th>QUESTION ID</th>
@@ -744,6 +795,13 @@ export const QuestionManager = () => {
                   ) : (
                     filteredQuestions.map((q, idx) => (
                       <tr key={q.id}>
+                        <td style={{ textAlign: 'center' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={selectedQuestionIds.has(q.id)} 
+                            onChange={() => handleSelectQuestion(q.id)} 
+                          />
+                        </td>
                         <td className="actions-cell">
                           <button className="edit-btn" title="Edit Question" onClick={() => { setEditingQuestion(q); setIsFormOpen(true); }}>
                             <i className="fa-solid fa-pen"></i>
